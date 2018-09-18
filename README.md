@@ -1,2 +1,2 @@
 # gpulearn
-gpu learn and proj 
+nvidia cuda program learning
