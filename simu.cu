@@ -161,7 +161,7 @@ main(void)
 
 	cudaEventRecord(gpu_start);
 
-	//vectorAdd << <blocksPerGrid, threadsPerBlock >> >(d_pmt, d_hit, d_result, total_num);
+	//µ÷ÓÃºËº¯Êý
 	CDF_Sampling <<<grid, block >>>(d_pmt, d_hit, d_result, total_num);
 
 	cudaEventRecord(gpu_stop);
