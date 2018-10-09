@@ -154,9 +154,9 @@ main(void)
 	cudaSetDevice(0);
 
 
-	//设置块数量
+	//设置线程数量
 	dim3 block(total_num);//threadsPerBlock
-	//设置网格数量
+	//设置块数量
 	dim3 grid(total_num / block.x);//blocksPerGrid
 
 	cudaEventRecord(gpu_start);
