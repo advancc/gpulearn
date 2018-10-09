@@ -1,5 +1,5 @@
 /**
- * Author:Ò×Åà»´
+ * Author:æ˜“åŸ¹æ·®
  * Mail:yiph@ihep.ac.cn
  * Function:Accelerate simulation with GPU
  */
@@ -17,7 +17,7 @@
 __device__ double generateRandom(curandState *state);
 __device__ void generateRandomInit(curandState *state);
 
-//´íÎó´¦Àíºê
+//é”™è¯¯å¤„ç†å®
 #define CHECK(call) \
 {\
 	const cudaError_t error = call;\
@@ -28,7 +28,7 @@ __device__ void generateRandomInit(curandState *state);
 		exit(1);\
 	}\
 }
-//´íÎó´¦Àíºê
+//é”™è¯¯å¤„ç†å®
 #define CHECK_CURAND(call) \
 {\
 	const cudaError_t error = call;\
@@ -40,15 +40,15 @@ __device__ void generateRandomInit(curandState *state);
 	}\
 }
 
-//ÄÚºËº¯Êı ÓÉ__global__Ç°×ºĞŞÊÎµÄº¯ÊıÔÚ±àÒëÉú³ÉGPU´úÂë£¬ÓÉCPUµ÷ÓÃ£¬²¢¶ÔCPUÈ«¾Ö¿É¼û
+//å†…æ ¸å‡½æ•° ç”±__global__å‰ç¼€ä¿®é¥°çš„å‡½æ•°åœ¨ç¼–è¯‘ç”ŸæˆGPUä»£ç ï¼Œç”±CPUè°ƒç”¨ï¼Œå¹¶å¯¹CPUå…¨å±€å¯è§
 __global__ void
 CDF_Sampling(double *pmt, double *hittime, double *result, int numElements)
 {
-    int id = threadIdx.x;
+   	int id = threadIdx.x;
 	curandState state;
 	generateRandomInit(&state);
-    if (id < numElements)
-    {
+    	if (id < numElements)
+    	{
 		double prob; 
 		prob = generateRandom(&state);
 		double sum = 0;
@@ -80,14 +80,14 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements)
 			}
 
 		}
-    }
+    	}
 }
-//GPUµ÷ÓÃµÄº¯Êı ÓÉ__device__Ç°×ºĞŞÊÎµÄº¯ÊıÔÚGPUÉÏÔËĞĞ£¬¶ÔCPU²»¿É¼û
+//GPUè°ƒç”¨çš„å‡½æ•° ç”±__device__å‰ç¼€ä¿®é¥°çš„å‡½æ•°åœ¨GPUä¸Šè¿è¡Œï¼Œå¯¹CPUä¸å¯è§
 __device__ double
 generateRandom(curandState *state)
 {
 	int id = threadIdx.x;
-    double result = abs(curand_uniform_double(state));
+    	double result = abs(curand_uniform_double(state));
 	printf("thread:%d random double: %f \n",id,result);
 	return result;
 }
@@ -106,7 +106,7 @@ int
 main(void)
 {
 	
-	//Éú³É¼ÙÊı¾İ
+	//ç”Ÿæˆå‡æ•°æ®
 	int total_num = 10;
 	int max_n = 10;
 	int max_time = 10;
@@ -133,7 +133,7 @@ main(void)
 	
 	double *h_res = (double*)malloc(nBytes);
 
-	//GPU¼ÆÊ±£¬ÉèÖÃ¿ªÊ¼ºÍ½áÊøÊÂ¼ş
+	//GPUè®¡æ—¶ï¼Œè®¾ç½®å¼€å§‹å’Œç»“æŸäº‹ä»¶
 	cudaEvent_t start, stop, gpu_start,gpu_stop;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
@@ -141,34 +141,34 @@ main(void)
 	cudaEventCreate(&gpu_stop);
 	cudaEventRecord(start);
 
-	//ÉêÇëGPUÄÚ´æ
+	//ç”³è¯·GPUå†…å­˜
 	double *d_pmt, *d_hit,*d_result;
 	CHECK(cudaMalloc((double**)&d_pmt,nBytes));
 	CHECK(cudaMalloc((double**)&d_hit, nBytes));
 	CHECK(cudaMalloc((double**)&d_result, nBytes));
-	//½«CPUÄÚ´æ¿½±´µ½GPU
+	//å°†CPUå†…å­˜æ‹·è´åˆ°GPU
 	CHECK(cudaMemcpy(d_pmt, pmt, nBytes, cudaMemcpyHostToDevice));
 	CHECK(cudaMemcpy(d_hit, hittime, nBytes, cudaMemcpyHostToDevice));
 
-	//ÉèÖÃÊ¹ÓÃ±àºÅÎª0µÄGPU
+	//è®¾ç½®ä½¿ç”¨ç¼–å·ä¸º0çš„GPU
 	cudaSetDevice(0);
 
 
-	//ÉèÖÃÏß³ÌÊıÁ¿
+	//è®¾ç½®çº¿ç¨‹æ•°é‡
 	dim3 block(total_num);//threadsPerBlock
-	//ÉèÖÃ¿éÊıÁ¿
+	//è®¾ç½®å—æ•°é‡
 	dim3 grid(total_num / block.x);//blocksPerGrid
 
 	cudaEventRecord(gpu_start);
 
-	//µ÷ÓÃºËº¯Êı
+	//è°ƒç”¨æ ¸å‡½æ•°
 	CDF_Sampling <<<grid, block >>>(d_pmt, d_hit, d_result, total_num);
 
 	cudaEventRecord(gpu_stop);
-	cudaEventSynchronize(gpu_stop);//Í¬²½£¬Ç¿ÖÆCPUµÈ´ıGPU event±»Éè¶¨
+	cudaEventSynchronize(gpu_stop);//åŒæ­¥ï¼Œå¼ºåˆ¶CPUç­‰å¾…GPU eventè¢«è®¾å®š
 
 	
-	//´ÓGPU¿½±´Êı¾İµ½CPU
+	//ä»GPUæ‹·è´æ•°æ®åˆ°CPU
 	CHECK(cudaMemcpy(h_res, d_result, nBytes, cudaMemcpyDeviceToHost));
 
 	cudaEventRecord(stop);
@@ -176,7 +176,7 @@ main(void)
 
 
 	float time;
-	//¼ÆËãÓÃÊ±£¬¾«¶È0.5us
+	//è®¡ç®—ç”¨æ—¶ï¼Œç²¾åº¦0.5us
 	cudaEventElapsedTime(&time, start, stop);
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
@@ -196,14 +196,14 @@ main(void)
 		}
 		printf("\n");
 	}
-	//ÊÍ·ÅGPUÄÚ´æ
+	//é‡Šæ”¾GPUå†…å­˜
 	CHECK(cudaFree(d_pmt));
 	CHECK(cudaFree(d_hit));
 	CHECK(cudaFree(d_result));
 	free(pmt);
 	free(hittime);
 	free(h_res);
-	//Çå¿ÕËùÕ¼GPU×ÊÔ´
+	//æ¸…ç©ºæ‰€å GPUèµ„æº
 	cudaDeviceReset();
 	return 0;
  
