@@ -1,5 +1,5 @@
 /**
- * Author:yipeihuai
+ * Author:Ò×Åà»´
  * Mail:yiph@ihep.ac.cn
  * Function:Accelerate simulation with GPU
  */
@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// For the CUDA runtime routines (prefixed with "cuda_")
 #include <cuda_runtime.h>
 #include <cuda.h>
 #include <curand.h>
@@ -15,14 +14,10 @@
 #include <time.h>
 #include <string.h>
 
-__device__ double generateRandom();
-//__global__ void generateRandom(long rand, double *result);
-/**
- * CUDA Kernel Device code
- *
- * Computes the vector addition of A and B into C. The 3 vectors have the same
- * number of elements numElements.
- */
+__device__ double generateRandom(curandState *state);
+__device__ void generateRandomInit(curandState *state);
+
+//´íÎó´¦Àíºê
 #define CHECK(call) \
 {\
 	const cudaError_t error = call;\
@@ -33,6 +28,7 @@ __device__ double generateRandom();
 		exit(1);\
 	}\
 }
+//´íÎó´¦Àíºê
 #define CHECK_CURAND(call) \
 {\
 	const cudaError_t error = call;\
@@ -43,40 +39,20 @@ __device__ double generateRandom();
 		exit(2);\
 	}\
 }
-long 
-getFileSize(FILE* file)
-{
-	long size;
-	fseek(file, 0, SEEK_END);
-	size = ftell(file);
-	rewind(file);
-	return size;
-}
 
-void 
-readFile(FILE* file, char* buffer, long size)
-{
-	size_t result;
-	result = fread(buffer, 1, size, file);
-	if (result != size)
-	{
-		printf("file read error:%d/%d", result, size);
-		exit(3);
-	}
-}
-
+//ÄÚºËº¯Êı ÓÉ__global__Ç°×ºĞŞÊÎµÄº¯ÊıÔÚ±àÒëÉú³ÉGPU´úÂë£¬ÓÉCPUµ÷ÓÃ£¬²¢¶ÔCPUÈ«¾Ö¿É¼û
 __global__ void
-vectorAdd(double *pmt, double *hittime, double *result, int numElements)
+CDF_Sampling(double *pmt, double *hittime, double *result, int numElements)
 {
     int id = threadIdx.x;
-	
+	curandState state;
+	generateRandomInit(&state);
     if (id < numElements)
     {
 		double prob; 
-		prob = generateRandom();
+		prob = generateRandom(&state);
 		double sum = 0;
 		int n = 0;
-		//æŠ½æ ·æ˜¯å¦å¯ç”¨çº¹ç†å†…å­˜ï¼Œsimon
 		for (int item = 0; item < 10;item++)
 		{
 			sum += pmt[id*10+item];
@@ -90,7 +66,7 @@ vectorAdd(double *pmt, double *hittime, double *result, int numElements)
 		for (int item = 0;item < n;item++) 
 		{
 			double prob2;
-			prob2 = generateRandom();
+			prob2 = generateRandom(&state);
 			double sum = 0;
 			for (int j = 0; j < 10;j++)
 			{
@@ -106,37 +82,37 @@ vectorAdd(double *pmt, double *hittime, double *result, int numElements)
 		}
     }
 }
+//GPUµ÷ÓÃµÄº¯Êı ÓÉ__device__Ç°×ºĞŞÊÎµÄº¯ÊıÔÚGPUÉÏÔËĞĞ£¬¶ÔCPU²»¿É¼û
 __device__ double
-generateRandom()
+generateRandom(curandState *state)
 {
-	curandState state;
 	int id = threadIdx.x;
-	//ç§å­è¦ç”¨å›ºå®šçš„ç§å­ï¼Œæ”¹æˆç§å­åˆ—è¡¨å­˜åœ¨å†…å­˜ä¸­ã€‚
-	//
-	long seed = id+(unsigned long long)clock();
-	//ä¸è¦å¤šæ¬¡åˆå§‹åŒ–ã€‚
-	curand_init(seed, id, 0, &state);
-    double result = abs(curand_uniform_double(&state));
+    double result = abs(curand_uniform_double(state));
 	printf("thread:%d random double: %f \n",id,result);
 	return result;
+}
+__device__ void
+generateRandomInit(curandState *state)
+{
+	int id = threadIdx.x;
+	long seed = (unsigned long long)clock();
+	curand_init(seed, id, 0, state);
 }
 
 /**
  * Host main routine
  */
- //ç¼–å†™åŠ¨æ€åº“ï¼Œæ–¹ä¾¿å…¶ä»–æ–‡ä»¶è°ƒç”¨ï¼ŒCPU/GPUç‰ˆæœ¬ï¼Œå…±ç”¨æ¥å£
- //æ¢ç´¢æ˜¯å¦èƒ½ç”¨pythonå’Œcudaå’ŒC++è”åˆä¸€èµ·ç”¨
 int
 main(void)
 {
-	//è·å–çœŸå®æ•°æ®ï¼Œè¿›è¡ŒçœŸæ­£çš„æ¨¡æ‹Ÿã€‚
+	
+	//Éú³É¼ÙÊı¾İ
 	int total_num = 10;
 	int max_n = 10;
 	int max_time = 10;
 	size_t nBytes = total_num * max_n * sizeof(double);
 	double *pmt;
 	pmt = (double*)malloc(nBytes);
-	//NumPyå†…å­˜é€šä¿¡
 	for (int i = 0;i < total_num;i++)
 	{
 		for (int j = 0;j < max_n;j++)
@@ -144,7 +120,6 @@ main(void)
 			pmt[i*total_num +j] = 0.1;
 		}
 	}
-	
 	double *hittime;
 	hittime = (double*)malloc(nBytes);
 	for (int i = 0;i < total_num;i++)
@@ -158,50 +133,61 @@ main(void)
 	
 	double *h_res = (double*)malloc(nBytes);
 
+	//GPU¼ÆÊ±£¬ÉèÖÃ¿ªÊ¼ºÍ½áÊøÊÂ¼ş
+	cudaEvent_t start, stop, gpu_start,gpu_stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	cudaEventCreate(&gpu_start);
+	cudaEventCreate(&gpu_stop);
+	cudaEventRecord(start);
+
+	//ÉêÇëGPUÄÚ´æ
 	double *d_pmt, *d_hit,*d_result;
-	//GPUå†…å­˜åˆ†é…ï¼Œçº¿ç¨‹ä¸å—çº§çš„å…¨å±€å†…å­˜å’Œå±€éƒ¨å†…å­˜çš„åˆ†é…
 	CHECK(cudaMalloc((double**)&d_pmt,nBytes));
 	CHECK(cudaMalloc((double**)&d_hit, nBytes));
 	CHECK(cudaMalloc((double**)&d_result, nBytes));
+	//½«CPUÄÚ´æ¿½±´µ½GPU
 	CHECK(cudaMemcpy(d_pmt, pmt, nBytes, cudaMemcpyHostToDevice));
 	CHECK(cudaMemcpy(d_hit, hittime, nBytes, cudaMemcpyHostToDevice));
 
-	// srand((unsigned int)time(NULL));
+	//ÉèÖÃÊ¹ÓÃ±àºÅÎª0µÄGPU
 	cudaSetDevice(0);
-	//è‡ªåŠ¨åˆ†é…å¤šGPUï¼Œç½‘æ ¼ã€çº¿ç¨‹
-	int blocksPerGrid = 1;
-	int threadsPerBlock = 10;
 
-	cudaEvent_t start,stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-	cudaEventRecord(start);
 
-	vectorAdd<<<blocksPerGrid, threadsPerBlock >>>(d_pmt,d_hit,d_result,total_num);
+	//ÉèÖÃ¿éÊıÁ¿
+	dim3 block(total_num);//threadsPerBlock
+	//ÉèÖÃÍø¸ñÊıÁ¿
+	dim3 grid(total_num / block.x);//blocksPerGrid
+
+	cudaEventRecord(gpu_start);
+
+	//vectorAdd << <blocksPerGrid, threadsPerBlock >> >(d_pmt, d_hit, d_result, total_num);
+	CDF_Sampling <<<grid, block >>>(d_pmt, d_hit, d_result, total_num);
+
+	cudaEventRecord(gpu_stop);
+	cudaEventSynchronize(gpu_stop);//Í¬²½£¬Ç¿ÖÆCPUµÈ´ıGPU event±»Éè¶¨
+
+	
+	//´ÓGPU¿½±´Êı¾İµ½CPU
+	CHECK(cudaMemcpy(h_res, d_result, nBytes, cudaMemcpyDeviceToHost));
 
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
 
+
 	float time;
-	cudaEventElapsedTime(&time,start,stop);
+	//¼ÆËãÓÃÊ±£¬¾«¶È0.5us
+	cudaEventElapsedTime(&time, start, stop);
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
-	printf("GPU use time %f msï¼ˆusï¼‰\n",time);
-	//æµ‹è¯•æ—¶é—´è¦ç”»å›¾ï¼Œç”»å›¾é‡åŒ–GPUå¯¹ç®—æ³•çš„æå‡
-	//æµ‹é‡æ—¶é—´çš„ç²¾åº¦
-	// CHECK(cudaDeviceSynchronize());
-	CHECK(cudaMemcpy(h_res, d_result, nBytes, cudaMemcpyDeviceToHost));
-	
-	for (int i = 0;i < total_num;i++)
-	{
-		for (int j = 0;j < max_time;j++)
-		{
-			printf("%f ",h_res[i*10+j]);
-		}
-		printf("\n");
-	}DeviceSynchronize());
-	CHECK(cudaMemcpy(h_res, d_result, nBytes, cudaMemcpyDeviceToHost));
-	
+
+
+	printf("total use time %f ms\n", time);
+	cudaEventElapsedTime(&time, gpu_start, gpu_stop);
+	cudaEventDestroy(gpu_start);
+	cudaEventDestroy(gpu_stop);
+	printf("gpu use time %f ms\n", time);
+
 	for (int i = 0;i < total_num;i++)
 	{
 		for (int j = 0;j < max_time;j++)
@@ -210,13 +196,16 @@ main(void)
 		}
 		printf("\n");
 	}
-
+	//ÊÍ·ÅGPUÄÚ´æ
 	CHECK(cudaFree(d_pmt));
 	CHECK(cudaFree(d_hit));
 	CHECK(cudaFree(d_result));
 	free(pmt);
 	free(hittime);
 	free(h_res);
+	//Çå¿ÕËùÕ¼GPU×ÊÔ´
 	cudaDeviceReset();
 	return 0;
  
+}
+
