@@ -117,7 +117,7 @@ main(void)
 	{
 		for (int j = 0;j < max_n;j++)
 		{
-			pmt[i*total_num +j] = 0.1;
+			pmt[i*max_n +j] = 0.1;
 		}
 	}
 	double *hittime;
@@ -126,7 +126,7 @@ main(void)
 	{
 		for (int j = 0;j < max_time;j++)
 		{
-			hittime[i*total_num+j] = 0.1;
+			hittime[i*max_time+j] = 0.1;
 		}
 	}
 	
