@@ -107,7 +107,7 @@ main(void)
 {
 	
 	//生成假数据
-	int total_num = 10;
+	int total_num = 100;
 	int max_n = 10;
 	int max_time = 10;
 	size_t nBytes = total_num * max_n * sizeof(double);
