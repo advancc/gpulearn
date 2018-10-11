@@ -192,7 +192,7 @@ main(void)
 	{
 		for (int j = 0;j < max_time;j++)
 		{
-			printf("%f ",h_res[i*10+j]);
+			printf("%f ",h_res[i*max_time+j]);
 		}
 		printf("\n");
 	}
