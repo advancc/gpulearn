@@ -1,5 +1,5 @@
 """
-@version: 1.0
+@version: 1.1
 @author: yipeihuai
 @mail: yiph@ihep.ac.cn
 @file: simu_so.py
@@ -9,19 +9,30 @@
 import numpy as np
 import ctypes
 import random
+import sys
+import logging
 from decimal import Decimal
 from ctypes import *
+
 
 # extract cdf_sampling_wrapper function pointer in the shared object simu_so.so
 def get_cdf_sampling_wrapper():
     dll = ctypes.CDLL('./simu_so.so', mode=ctypes.RTLD_GLOBAL)
     func = dll.CDF_Sampling_wrapper
     func.argtypes = [POINTER(c_double), POINTER(c_double), POINTER(c_double), c_int, c_int, c_int, c_int]
+    func.restype = c_float
     return func
 
-# create __cuda_cdf_sampling function with get_cdf_sampling_wrapper()
-__cuda_cdf_sampling = get_cdf_sampling_wrapper()
+def get_cdf_sampling_wrapper_C():
+    dll = ctypes.CDLL('./simu_c.so', mode=ctypes.RTLD_GLOBAL)
+    func = dll.CDF_Sampling_wrapper
+    func.argtypes = [POINTER(c_double), POINTER(c_double), POINTER(c_double), c_int, c_int, c_int]
+    func.restype = c_double
+    return func   
 
+# create __cuda_cdf_sampling function with get_cdf_sampling_wrapper()
+__cuda_cdf_sampling   = get_cdf_sampling_wrapper()
+__cuda_cdf_sampling_C = get_cdf_sampling_wrapper_C()
 # convenient python wrapper for __cuda_cdf_sampling
 # it does all job with types convertation
 # from python ones to C++ ones
@@ -30,8 +41,14 @@ def cuda_cdf_sampling(a, b, c, total_num, size, n, time):
     b_p = b.ctypes.data_as(POINTER(c_double))
     c_p = c.ctypes.data_as(POINTER(c_double))
 
-    __cuda_cdf_sampling(a_p, b_p, c_p, total_num, size, n, time)
+    return __cuda_cdf_sampling(a_p, b_p, c_p, total_num, size, n, time)
 
+def cuda_cdf_sampling_C(a, b, c, total_num, n, time):
+    a_p = a.ctypes.data_as(POINTER(c_double))
+    b_p = b.ctypes.data_as(POINTER(c_double))
+    c_p = c.ctypes.data_as(POINTER(c_double))
+
+    return __cuda_cdf_sampling_C(a_p, b_p, c_p, total_num, n, time)
 
 def create_npe_histo(max_n):
     # max_n 最大光子数量
@@ -58,11 +75,10 @@ def create_hittime_histo(max_time):
     histo = [str(i) for i in prob]
     return histo
 
-
-if __name__ == '__main__':
+def run(pmt_num,loc_num):
     #数据生成
-    pmt_num = 500
-    loc_num = 100
+    # pmt_num = 500
+    # loc_num = 100
     max_n = 10
     max_time = 10
     total = str(pmt_num * loc_num)
@@ -86,9 +102,26 @@ if __name__ == '__main__':
 
     result = np.zeros(size/8).astype('double')
 
-    cuda_cdf_sampling(temp_np_npe, temp_np_hit, result, pmt_num*loc_num, size, max_n, max_time)
+    gputime = cuda_cdf_sampling(temp_np_npe, temp_np_hit, result, pmt_num*loc_num, size, max_n, max_time)
     print("GPU执行结束")
+    logging.info(gputime)
+    print("CPU开始执行")
+    cputime = cuda_cdf_sampling_C(temp_np_npe, temp_np_hit, result, pmt_num*loc_num,max_n,max_time)
+    print("CPU执行结束")
+    logging.info(cputime)
     #强制打印numpy数组全部元素
     # np.set_printoptions(threshold=np.nan)
-    for index in range(0,len(result),max_n):
-        print(result[index:index+max_n])
+    # for index in range(0,len(result),max_n):
+    #     logging.info(result[index:index+max_n])
+
+
+if __name__ == '__main__':
+    logging.basicConfig(filename='logger.log', filemode='w', level=logging.INFO)
+    if len(sys.argv)>2:
+        pmt_num = int(sys.argv[1])
+        loc_num = int(sys.argv[2])
+    else:
+        pmt_num = 10
+        loc_num = 2
+    run(pmt_num,loc_num)
+    

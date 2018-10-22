@@ -21,7 +21,8 @@ __device__ void generateRandomInit(curandState *state);
 __global__ void
 CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int max_n,int max_time)
 {
-    int id = threadIdx.x;
+	//compute one-dimensional data index 
+	int id = blockIdx.x*blockDim.x+threadIdx.x;
 	curandState state;
 	generateRandomInit(&state);
     if (id < numElements)
@@ -36,7 +37,7 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int m
 			if (prob <= sum)
 			{
 				n = item;
-				printf("thread %d: hit times:%d\n", id, n);
+				// printf("thread %d: hit times:%d\n", id, n);
 				break;
 			}
 		}
@@ -51,7 +52,7 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int m
 				if (prob2 <= sum)
 				{
 					result[id*max_n+item] = (double)j;
-					printf("thread %d: %dth hit time %d\n", id, item+1,j);
+					// printf("thread %d: %dth hit time %d\n", id, item+1,j);
 					break;
 				}
 			}
@@ -62,23 +63,23 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int m
 __device__ double
 generateRandom(curandState *state)
 {
-	int id = threadIdx.x;
+	// int id = blockIdx.x*blockDim.x+threadIdx.x;
     double result = abs(curand_uniform_double(state));
-	printf("thread:%d random double: %f \n",id,result);
+	// printf("thread:%d random double: %f \n",id,result);
 	return result;
 }
 
 __device__ void
 generateRandomInit(curandState *state)
 {
-	int id = threadIdx.x;
+	int id = blockIdx.x*blockDim.x+threadIdx.x;
 	long seed = (unsigned long long)clock();
 	curand_init(seed, id, 0, state);
 }
 
 extern "C" 
 {
-    void CDF_Sampling_wrapper(double *h_pmt,double *h_hit,double *h_result, int total_num, int nBytes,int max_n,int max_time)
+    float CDF_Sampling_wrapper(double *h_pmt,double *h_hit,double *h_result, int total_num, int nBytes,int max_n,int max_time)
     {
 		//GPU计时，设置开始和结束事件
 		cudaEvent_t start, stop, gpu_start,gpu_stop;
@@ -136,7 +137,8 @@ extern "C"
 		cudaEventDestroy(start);
 		cudaEventDestroy(stop);
 
-
+		printf("threadPerBlock:%d\n",threadPerBlock);
+		printf("blocksPerGrid；%d\n",blocksPerGrid);
 		printf("total use time %f ms\n", total_time);
 		cudaEventElapsedTime(&time, gpu_start, gpu_stop);
 		cudaEventDestroy(gpu_start);
@@ -147,6 +149,7 @@ extern "C"
         //释放GPU内存
 	    CHECK(cudaFree(d_pmt));
 	    CHECK(cudaFree(d_hit));
-	    CHECK(cudaFree(d_result));
+		CHECK(cudaFree(d_result));
+		return total_time;
     }
 }
