@@ -18,6 +18,14 @@ __device__ void generateRandomInit(curandState *state);
 	}\
 }
 
+typedef struct
+{
+	double *d_pmt, *d_hit,*d_result;
+	cudaStream_t stream;
+
+}GPU_mem;
+
+
 __global__ void
 CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int max_n,int max_time)
 {
@@ -59,7 +67,7 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int m
 
 		}
     }
-}
+} 
 __device__ double
 generateRandom(curandState *state)
 {
@@ -87,33 +95,54 @@ extern "C"
 		cudaEventCreate(&stop);
 		cudaEventCreate(&gpu_start);
 		cudaEventCreate(&gpu_stop);
+		
+		//获取GPU数量
+		int GPU_num;
+		CHECK(cudaGetDeviceCount(&GPU_num));
+		if(num_gpus<1)
+		{
+			printf("no CUDA capable devices were detected\n");
+			return -1;
+		}
+		GPU_data gdata[i];
 		cudaEventRecord(start);
         //申请GPU内存
-	    double *d_pmt, *d_hit,*d_result;
-	    CHECK(cudaMalloc((double**)&d_pmt,nBytes));
-	    CHECK(cudaMalloc((double**)&d_hit, nBytes));
-	    CHECK(cudaMalloc((double**)&d_result, nBytes));
+		// double *d_pmt, *d_hit,*d_result;
+		for(int gpu_id =0; gpu_id < GPU_num; gpu_id++)
+		{
+			cudaSetDevice(gpu_id);
+			cudaStreamCreate(&data[gpu_id].stream);
+			CHECK(cudaMalloc((double**)&(data[gpu_id].d_pmt),nBytes/GPU_num));
+	    	CHECK(cudaMalloc((double**)&(data[gpu_id].d_hit), nBytes/GPU_num));
+			CHECK(cudaMalloc((double**)&(data[gpu_id].d_result), nBytes/GPU_num));
+			//
+			CHECK(cudaMemcpyAsync(data[gpu_id].d_pmt, h_pmt+gpu_id*nBytes/GPU_num, nBytes/GPU_num, cudaMemcpyHostToDevice, data[gpu_id].stream));
+			CHECK(cudaMemcpyAsync(data[gpu_id].d_hit, h_hit+gpu_id*nBytes/GPU_num, nBytes/GPU_num, cudaMemcpyHostToDevice, data[gpu_id].stream));
+		}
+	    
         //将CPU内存拷贝到GPU
-	    CHECK(cudaMemcpy(d_pmt, h_pmt, nBytes, cudaMemcpyHostToDevice));
-        CHECK(cudaMemcpy(d_hit, h_hit, nBytes, cudaMemcpyHostToDevice));
+	    // CHECK(cudaMemcpy(d_pmt, h_pmt, nBytes, cudaMemcpyHostToDevice));
+		// CHECK(cudaMemcpy(d_hit, h_hit, nBytes, cudaMemcpyHostToDevice));
+		
         //设置使用编号为0的GPU
-	    CHECK(cudaSetDevice(0));
+		// CHECK(cudaSetDevice(0));
+		
 		//设置线程数量
 		int threadPerBlock,blocksPerGrid;
-		if (total_num<128)
+		if (total_num/GPU_num<128)
 		{
 			threadPerBlock = 128;
 			blocksPerGrid =1;
 		}
-		else if(total_num<1024)
+		else if(total_num/GPU_num<1024)
 		{
 			threadPerBlock = 128;
-			blocksPerGrid =int(ceil(total_num/(double)threadPerBlock));
+			blocksPerGrid =int(ceil(total_num/GPU_num/(double)threadPerBlock));
 		}
 		else
 		{
 			threadPerBlock = 1024;
-			blocksPerGrid =int(ceil(total_num/(double)threadPerBlock));
+			blocksPerGrid =int(ceil(total_num/GPU_num/(double)threadPerBlock));
 		}
 		
 	    dim3 block(threadPerBlock);
@@ -121,8 +150,14 @@ extern "C"
 		dim3 grid(blocksPerGrid);//blocksPerGrid
 		
 		cudaEventRecord(gpu_start);
-        //调用核函数
-		CDF_Sampling <<<grid, block >>>(d_pmt, d_hit, d_result, total_num,max_n,max_time);
+		//调用核函数
+		for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
+		{
+			cudaSetDevice(gpu_id);
+			cudaStreamSynchronize(data[i].stream);
+			CDF_Sampling <<<grid, block >>>(data[gpu_id].d_pmt, data[gpu_id].d_hit, data[gpu_id].d_result, total_num/GPU_num,max_n,max_time);
+		}
+		
 		
 		cudaEventRecord(gpu_stop);
 		cudaEventSynchronize(gpu_stop);//同步，强制CPU等待GPU event被设定
@@ -150,6 +185,7 @@ extern "C"
 	    CHECK(cudaFree(d_pmt));
 	    CHECK(cudaFree(d_hit));
 		CHECK(cudaFree(d_result));
+		CHECK(cudaDeviceReset());
 		return total_time;
     }
 }
