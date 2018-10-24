@@ -39,13 +39,13 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int m
 		prob = generateRandom(&state);
 		double sum = 0;
 		int n = 0;
-		for (int item = 0; item < max_n;item++)
+		for (int item = 0; item < max_n; item++)
 		{
 			sum += pmt[id*max_n+item];
 			if (prob <= sum)
 			{
 				n = item;
-				// printf("thread %d: hit times:%d\n", id, n);
+				printf("thread %d: hit times:%d\n", id, n);
 				break;
 			}
 		}
@@ -60,7 +60,7 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int m
 				if (prob2 <= sum)
 				{
 					result[id*max_n+item] = (double)j;
-					// printf("thread %d: %dth hit time %d\n", id, item+1,j);
+					printf("thread %d: %dth hit time %d\n", id, item+1,j);
 					break;
 				}
 			}
@@ -90,11 +90,12 @@ extern "C"
     float CDF_Sampling_wrapper(double *h_pmt,double *h_hit,double *h_result, int total_num, int nBytes,int max_n,int max_time)
     {
 		//GPU计时，设置开始和结束事件
-		cudaEvent_t start, stop, gpu_start,gpu_stop;
+		cudaEvent_t start, stop;
+		// cudaEvent_t gpu_start,gpu_stop;
 		cudaEventCreate(&start);
 		cudaEventCreate(&stop);
-		cudaEventCreate(&gpu_start);
-		cudaEventCreate(&gpu_stop);
+		// cudaEventCreate(&gpu_start);
+		// cudaEventCreate(&gpu_stop);
 		
 		//获取GPU数量
 		int GPU_num;
@@ -149,21 +150,29 @@ extern "C"
 	    //设置块数量
 		dim3 grid(blocksPerGrid);//blocksPerGrid
 		
-		cudaEventRecord(gpu_start);
+		// cudaEventRecord(gpu_start);
 		//调用核函数
 		for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
 		{
 			cudaSetDevice(gpu_id);
-			cudaStreamSynchronize(data[i].stream);
-			CDF_Sampling <<<grid, block >>>(data[gpu_id].d_pmt, data[gpu_id].d_hit, data[gpu_id].d_result, total_num/GPU_num,max_n,max_time);
+			//第三个参数为0，表示每个block用到的共享内存大小为0
+			CDF_Sampling <<<grid, block, 0,data[gpu_id].stream >>>(data[gpu_id].d_pmt, data[gpu_id].d_hit, data[gpu_id].d_result, total_num/GPU_num,max_n,max_time);
+			CHECK(cudaMemcpyAsync(h_result+gpu_id*nBytes/GPU_num, data[gpu_id].d_result, nBytes/GPU_num, cudaMemcpyDeviceToHost,data[gpu_id].stream));
 		}
 		
 		
-		cudaEventRecord(gpu_stop);
-		cudaEventSynchronize(gpu_stop);//同步，强制CPU等待GPU event被设定
+		
+		// cudaEventRecord(gpu_stop);
+		// cudaEventSynchronize(gpu_stop);//同步，强制CPU等待GPU event被设定
 
-        CHECK(cudaDeviceSynchronize());
-		CHECK(cudaMemcpy(h_result, d_result, nBytes, cudaMemcpyDeviceToHost));
+        // CHECK(cudaDeviceSynchronize());
+		// CHECK(cudaMemcpy(h_result, d_result, nBytes, cudaMemcpyDeviceToHost));
+		//等待stream流执行完成
+		for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
+		{
+			cudaStreamSynchronize(data[i].stream);
+		}
+
 		cudaEventRecord(stop);
 		cudaEventSynchronize(stop);
 		float time,total_time;
@@ -175,16 +184,22 @@ extern "C"
 		printf("threadPerBlock:%d\n",threadPerBlock);
 		printf("blocksPerGrid；%d\n",blocksPerGrid);
 		printf("total use time %f ms\n", total_time);
-		cudaEventElapsedTime(&time, gpu_start, gpu_stop);
-		cudaEventDestroy(gpu_start);
-		cudaEventDestroy(gpu_stop);
-		printf("gpu use time %f ms\n", time);
+		// cudaEventElapsedTime(&time, gpu_start, gpu_stop);
+		// cudaEventDestroy(gpu_start);
+		// cudaEventDestroy(gpu_stop);
+		// printf("gpu use time %f ms\n", time);
 		printf("占用内存：%d B\n", nBytes);
 		printf("占用内存：%d kB\n", nBytes / 1024);
-        //释放GPU内存
-	    CHECK(cudaFree(d_pmt));
-	    CHECK(cudaFree(d_hit));
-		CHECK(cudaFree(d_result));
+
+		//释放GPU内存
+		for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
+		{  
+			CHECK(cudaFree(data[gpu_id].d_pmt));
+	    	CHECK(cudaFree(data[gpu_id].d_hit));
+			CHECK(cudaFree(data[gpu_id].d_result));
+			CHECK(cudaStreamDestroy(data[gpu_id].stream));
+		}
+	  
 		CHECK(cudaDeviceReset());
 		return total_time;
     }
