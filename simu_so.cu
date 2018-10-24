@@ -23,7 +23,7 @@ typedef struct
 	double *d_pmt, *d_hit,*d_result;
 	cudaStream_t stream;
 
-}GPU_mem;
+}GPU_data;
 
 
 __global__ void
@@ -100,12 +100,12 @@ extern "C"
 		//获取GPU数量
 		int GPU_num;
 		CHECK(cudaGetDeviceCount(&GPU_num));
-		if(num_gpus<1)
+		if(GPU_num<1)
 		{
 			printf("no CUDA capable devices were detected\n");
 			return -1;
 		}
-		GPU_data gdata[i];
+		GPU_data data[GPU_num];
 		cudaEventRecord(start);
         //申请GPU内存
 		// double *d_pmt, *d_hit,*d_result;
@@ -170,12 +170,12 @@ extern "C"
 		//等待stream流执行完成
 		for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
 		{
-			cudaStreamSynchronize(data[i].stream);
+			cudaStreamSynchronize(data[gpu_id].stream);
 		}
 
 		cudaEventRecord(stop);
 		cudaEventSynchronize(stop);
-		float time,total_time;
+		float total_time;
 		//计算用时，精度0.5us
 		cudaEventElapsedTime(&total_time, start, stop);
 		cudaEventDestroy(start);
