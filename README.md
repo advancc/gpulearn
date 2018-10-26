@@ -2,5 +2,5 @@
 nvidia cuda program learning
 
 #run 
- python3 simu_so.oy argv1 argv2
+ python3 simu_so.py argv1 argv2
  
