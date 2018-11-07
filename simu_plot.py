@@ -19,11 +19,19 @@ with open(filename) as file_object:
     # print(x_list)
     # print(gpu_list)
     # print(cpu_list)
+    plt.subplot(121)
     plt.plot(x_list,gpu_list,label='gpu')
     plt.plot(x_list,cpu_list,label='cpu')
     plt.title("GPU vs CPU")
     plt.xlabel('parallellism thread number')
     plt.ylabel("time(ms)")
+
+    plt.subplot(122)
+    plt.plot(x_list,gpu_list,label='gpu')
+    plt.title("GPU")
+    plt.xlabel('parallellism thread number')
+    plt.ylabel("time(ms)")
+
     plt.legend()#显示图例
     plt.show()
 

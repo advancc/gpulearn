@@ -3,9 +3,11 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include <stdio.h>
+#include <string.h>
 
 __device__ double generateRandom(curandState *state);
-__device__ void generateRandomInit(curandState *state);
+__device__ void generateRandomInit(curandState *state,int i );
+
 //错误处理宏
 #define CHECK(call) \
 {\
@@ -20,19 +22,20 @@ __device__ void generateRandomInit(curandState *state);
 
 typedef struct
 {
-	double *d_pmt, *d_hit,*d_result;
+	double *d_pmt, *d_hit, *d_result;
+	// double *h_result_s;
 	cudaStream_t stream;
-
+	cudaEvent_t start, stop;
 }GPU_data;
 
 
 __global__ void
-CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int max_n,int max_time)
+CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int max_n,int max_time,int gpu_id)
 {
 	//compute one-dimensional data index 
 	int id = blockIdx.x*blockDim.x+threadIdx.x;
 	curandState state;
-	generateRandomInit(&state);
+	generateRandomInit(&state,id);
     if (id < numElements)
     {
 		double prob; 
@@ -45,22 +48,22 @@ CDF_Sampling(double *pmt, double *hittime, double *result, int numElements,int m
 			if (prob <= sum)
 			{
 				n = item;
-				printf("thread %d: hit times:%d\n", id, n);
+				// printf("[gpu: %d] thread %d: hit times:%d\n",gpu_id, id, n);
 				break;
 			}
 		}
 		for (int item = 0;item < n;item++) 
 		{
-			double prob2;
-			prob2 = generateRandom(&state);
-			double sum = 0;
+			// double prob2;
+			prob = generateRandom(&state);
+			sum = 0;
 			for (int j = 0; j < max_time;j++)
 			{
 				sum += hittime[id*max_time+j];
-				if (prob2 <= sum)
+				if (prob <= sum)
 				{
 					result[id*max_n+item] = (double)j;
-					printf("thread %d: %dth hit time %d\n", id, item+1,j);
+					// printf("[gpu: %d] thread %d: %dth hit time %d\n",gpu_id, id, item+1,j);
 					break;
 				}
 			}
@@ -78,47 +81,56 @@ generateRandom(curandState *state)
 }
 
 __device__ void
-generateRandomInit(curandState *state)
+generateRandomInit(curandState *state,int id)
 {
-	int id = blockIdx.x*blockDim.x+threadIdx.x;
-	long seed = (unsigned long long)clock();
-	curand_init(seed, id, 0, state);
+	// long seed = (unsigned long long)clock();
+	curand_init(id, 0, 0, state);
 }
+// __host__ void
+// initData(double *h_pmt, double *h_hit, int Size)
+// {
+
+// }
 
 extern "C" 
 {
     float CDF_Sampling_wrapper(double *h_pmt,double *h_hit,double *h_result, int total_num, int nBytes,int max_n,int max_time)
     {
 		//GPU计时，设置开始和结束事件
-		cudaEvent_t start, stop;
-		// cudaEvent_t gpu_start,gpu_stop;
-		cudaEventCreate(&start);
-		cudaEventCreate(&stop);
-		// cudaEventCreate(&gpu_start);
-		// cudaEventCreate(&gpu_stop);
+		// cudaEvent_t start, stop;
+		// cudaEventCreate(&start);
+		// cudaEventCreate(&stop);
+		
 		
 		//获取GPU数量
 		int GPU_num;
 		CHECK(cudaGetDeviceCount(&GPU_num));
+		// printf("GPU number:%d\n",GPU_num);
 		if(GPU_num<1)
 		{
 			printf("no CUDA capable devices were detected\n");
 			return -1;
 		}
 		GPU_data data[GPU_num];
-		cudaEventRecord(start);
+		int single_size = total_num/GPU_num;
+		int single_bytes = nBytes/GPU_num;
+		// cudaEventRecord(start,0);
         //申请GPU内存
 		// double *d_pmt, *d_hit,*d_result;
 		for(int gpu_id =0; gpu_id < GPU_num; gpu_id++)
 		{
 			cudaSetDevice(gpu_id);
 			cudaStreamCreate(&data[gpu_id].stream);
-			CHECK(cudaMalloc((double**)&(data[gpu_id].d_pmt),nBytes/GPU_num));
-	    	CHECK(cudaMalloc((double**)&(data[gpu_id].d_hit), nBytes/GPU_num));
-			CHECK(cudaMalloc((double**)&(data[gpu_id].d_result), nBytes/GPU_num));
+			cudaEventCreate(&data[gpu_id].start);
+			cudaEventCreate(&data[gpu_id].stop);
+			cudaEventRecord(data[gpu_id].start,data[gpu_id].stream);
+			CHECK(cudaMalloc((double**)&(data[gpu_id].d_pmt),single_bytes));
+	    	CHECK(cudaMalloc((double**)&(data[gpu_id].d_hit), single_bytes));
+			CHECK(cudaMalloc((double**)&(data[gpu_id].d_result), single_bytes));
+			// data[gpu_id].h_result_s = (double*)malloc(single_bytes);
 			//
-			CHECK(cudaMemcpyAsync(data[gpu_id].d_pmt, h_pmt+gpu_id*nBytes/GPU_num, nBytes/GPU_num, cudaMemcpyHostToDevice, data[gpu_id].stream));
-			CHECK(cudaMemcpyAsync(data[gpu_id].d_hit, h_hit+gpu_id*nBytes/GPU_num, nBytes/GPU_num, cudaMemcpyHostToDevice, data[gpu_id].stream));
+			CHECK(cudaMemcpyAsync(data[gpu_id].d_pmt, (double*)(h_pmt+gpu_id*single_bytes/8), single_bytes, cudaMemcpyHostToDevice, data[gpu_id].stream));
+			CHECK(cudaMemcpyAsync(data[gpu_id].d_hit, (double*)(h_hit+gpu_id*single_bytes/8), single_bytes, cudaMemcpyHostToDevice, data[gpu_id].stream));
 		}
 	    
         //将CPU内存拷贝到GPU
@@ -130,20 +142,20 @@ extern "C"
 		
 		//设置线程数量
 		int threadPerBlock,blocksPerGrid;
-		if (total_num/GPU_num<128)
+		if (single_size<128)
 		{
 			threadPerBlock = 128;
 			blocksPerGrid =1;
 		}
-		else if(total_num/GPU_num<1024)
+		else if(single_size<1024)
 		{
 			threadPerBlock = 128;
-			blocksPerGrid =int(ceil(total_num/GPU_num/(double)threadPerBlock));
+			blocksPerGrid =int(ceil(single_size/(double)threadPerBlock));
 		}
 		else
 		{
 			threadPerBlock = 1024;
-			blocksPerGrid =int(ceil(total_num/GPU_num/(double)threadPerBlock));
+			blocksPerGrid =int(ceil(single_size/(double)threadPerBlock));
 		}
 		
 	    dim3 block(threadPerBlock);
@@ -156,8 +168,9 @@ extern "C"
 		{
 			cudaSetDevice(gpu_id);
 			//第三个参数为0，表示每个block用到的共享内存大小为0
-			CDF_Sampling <<<grid, block, 0,data[gpu_id].stream >>>(data[gpu_id].d_pmt, data[gpu_id].d_hit, data[gpu_id].d_result, total_num/GPU_num,max_n,max_time);
-			CHECK(cudaMemcpyAsync(h_result+gpu_id*nBytes/GPU_num, data[gpu_id].d_result, nBytes/GPU_num, cudaMemcpyDeviceToHost,data[gpu_id].stream));
+			CDF_Sampling <<<grid, block, 0,data[gpu_id].stream >>>(data[gpu_id].d_pmt, data[gpu_id].d_hit, data[gpu_id].d_result, single_size,max_n,max_time,gpu_id);
+			// CHECK(cudaMemcpyAsync(data[gpu_id].h_result_s, data[gpu_id].d_result, single_bytes, cudaMemcpyDeviceToHost,data[gpu_id].stream));
+			CHECK(cudaMemcpyAsync((double*)(h_result+gpu_id*single_bytes/8),data[gpu_id].d_result,single_bytes,cudaMemcpyDeviceToHost,data[gpu_id].stream));
 		}
 		
 		
@@ -165,31 +178,42 @@ extern "C"
 		// cudaEventRecord(gpu_stop);
 		// cudaEventSynchronize(gpu_stop);//同步，强制CPU等待GPU event被设定
 
-        // CHECK(cudaDeviceSynchronize());
-		// CHECK(cudaMemcpy(h_result, d_result, nBytes, cudaMemcpyDeviceToHost));
-		//等待stream流执行完成
+		CHECK(cudaDeviceSynchronize());
 		for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
 		{
-			cudaStreamSynchronize(data[gpu_id].stream);
+			cudaEventRecord(data[gpu_id].stop,data[gpu_id].stream);
+			cudaEventSynchronize(data[gpu_id].stop);
 		}
-
-		cudaEventRecord(stop);
-		cudaEventSynchronize(stop);
+		
+		// CHECK(cudaMemcpy(h_result, d_result, nBytes, cudaMemcpyDeviceToHost));
+		//等待stream流执行完成
+		// for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
+		// {
+		// 	CHECK(cudaStreamSynchronize(data[gpu_id].stream));
+		// 	cudaEventRecord(data[gpu_id].stop,data[gpu_id].stream);
+		// 	cudaEventSynchronize(data[gpu_id].stop);
+		// }
+		// for(i  nt gpu_id = 0; gpu_id < GPU_num; gpu_id++)
+		// {
+		// 	memcpy(h_result+gpu_id*single_bytes,data[gpu_id].h_result_s,single_bytes);
+		// }
+		// cudaEventRecord(stop,0);
+		// cudaEventSynchronize(stop);
 		float total_time;
 		//计算用时，精度0.5us
-		cudaEventElapsedTime(&total_time, start, stop);
-		cudaEventDestroy(start);
-		cudaEventDestroy(stop);
+		cudaEventElapsedTime(&total_time, data[0].start, data[0].stop);
+		// cudaEventDestroy(start);
+		// cudaEventDestroy(stop);
 
-		printf("threadPerBlock:%d\n",threadPerBlock);
-		printf("blocksPerGrid；%d\n",blocksPerGrid);
-		printf("total use time %f ms\n", total_time);
+		// printf("threadPerBlock:%d\n",threadPerBlock);
+		// printf("blocksPerGrid；%d\n",blocksPerGrid);
+		// printf("total use time %f ms\n", total_time);
 		// cudaEventElapsedTime(&time, gpu_start, gpu_stop);
 		// cudaEventDestroy(gpu_start);
 		// cudaEventDestroy(gpu_stop);
 		// printf("gpu use time %f ms\n", time);
-		printf("占用内存：%d B\n", nBytes);
-		printf("占用内存：%d kB\n", nBytes / 1024);
+		// printf("占用内存：%d B\n", nBytes);
+		// printf("占用内存：%d kB\n", nBytes / 1024);
 
 		//释放GPU内存
 		for(int gpu_id = 0; gpu_id < GPU_num; gpu_id++)
@@ -198,6 +222,8 @@ extern "C"
 	    	CHECK(cudaFree(data[gpu_id].d_hit));
 			CHECK(cudaFree(data[gpu_id].d_result));
 			CHECK(cudaStreamDestroy(data[gpu_id].stream));
+			CHECK(cudaEventDestroy(data[gpu_id].start));
+			CHECK(cudaEventDestroy(data[gpu_id].stop));
 		}
 	  
 		CHECK(cudaDeviceReset());

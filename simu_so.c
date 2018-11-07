@@ -5,7 +5,7 @@
 
 void CDF_Sampling(double *pmt, double *hittime, double *result, int numElements, int max_n, int max_time);
 double generateRandom();
-void generateRandomInit();
+void generateRandomInit(int i);
 
 
 
@@ -13,16 +13,16 @@ double generateRandom()
 {
     return (double)rand()/RAND_MAX;
 }
-void generateRandomInit()
+void generateRandomInit(int i)
 {
-	srand((unsigned int)time(NULL));
+	srand(i);
 }
 void CDF_Sampling(double *pmt, double *hittime, double *result, int numElements, int max_n, int max_time)
 {
 
     for(int i=0;i < numElements;i++)
     {
-        generateRandomInit();
+        generateRandomInit(i);
 		double prob = generateRandom();
 		double sum = 0;
 		int n = 0;
@@ -68,6 +68,6 @@ extern double CDF_Sampling_wrapper(double *pmt,double *hittime,double *h_result,
     
     gettimeofday(&t2,NULL);
     timeuse = (t2.tv_sec - t1.tv_sec)*1000 + (t2.tv_usec - t1.tv_usec)/1000.0;
-    printf("Use Time: %f ms\n",timeuse);
+    // printf("Use Time: %f ms\n",timeuse);
     return timeuse;
 }
