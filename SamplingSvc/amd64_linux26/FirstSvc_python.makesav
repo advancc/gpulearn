@@ -1,0 +1,164 @@
+#-- start of make_header -----------------
+
+#====================================
+#  Document FirstSvc_python
+#
+#   Generated Tue Oct 30 17:36:25 2018  by zoujh
+#
+#====================================
+
+include ${CMTROOT}/src/Makefile.core
+
+ifdef tag
+CMTEXTRATAGS = $(tag)
+else
+tag       = $(CMTCONFIG)
+endif
+
+cmt_FirstSvc_python_has_no_target_tag = 1
+
+#--------------------------------------------------------
+
+ifdef cmt_FirstSvc_python_has_target_tag
+
+tags      = $(tag),$(CMTEXTRATAGS),target_FirstSvc_python
+
+FirstSvc_tag = $(tag)
+
+#cmt_local_tagfile_FirstSvc_python = $(FirstSvc_tag)_FirstSvc_python.make
+cmt_local_tagfile_FirstSvc_python = $(bin)$(FirstSvc_tag)_FirstSvc_python.make
+
+else
+
+tags      = $(tag),$(CMTEXTRATAGS)
+
+FirstSvc_tag = $(tag)
+
+#cmt_local_tagfile_FirstSvc_python = $(FirstSvc_tag).make
+cmt_local_tagfile_FirstSvc_python = $(bin)$(FirstSvc_tag).make
+
+endif
+
+include $(cmt_local_tagfile_FirstSvc_python)
+#-include $(cmt_local_tagfile_FirstSvc_python)
+
+ifdef cmt_FirstSvc_python_has_target_tag
+
+cmt_final_setup_FirstSvc_python = $(bin)setup_FirstSvc_python.make
+cmt_dependencies_in_FirstSvc_python = $(bin)dependencies_FirstSvc_python.in
+#cmt_final_setup_FirstSvc_python = $(bin)FirstSvc_FirstSvc_pythonsetup.make
+cmt_local_FirstSvc_python_makefile = $(bin)FirstSvc_python.make
+
+else
+
+cmt_final_setup_FirstSvc_python = $(bin)setup.make
+cmt_dependencies_in_FirstSvc_python = $(bin)dependencies.in
+#cmt_final_setup_FirstSvc_python = $(bin)FirstSvcsetup.make
+cmt_local_FirstSvc_python_makefile = $(bin)FirstSvc_python.make
+
+endif
+
+#cmt_final_setup = $(bin)setup.make
+#cmt_final_setup = $(bin)FirstSvcsetup.make
+
+#FirstSvc_python :: ;
+
+dirs ::
+	@if test ! -r requirements ; then echo "No requirements file" ; fi; \
+	  if test ! -d $(bin) ; then $(mkdir) -p $(bin) ; fi
+
+javadirs ::
+	@if test ! -d $(javabin) ; then $(mkdir) -p $(javabin) ; fi
+
+srcdirs ::
+	@if test ! -d $(src) ; then $(mkdir) -p $(src) ; fi
+
+help ::
+	$(echo) 'FirstSvc_python'
+
+binobj = 
+ifdef STRUCTURED_OUTPUT
+binobj = FirstSvc_python/
+#FirstSvc_python::
+#	@if test ! -d $(bin)$(binobj) ; then $(mkdir) -p $(bin)$(binobj) ; fi
+#	$(echo) "STRUCTURED_OUTPUT="$(bin)$(binobj)
+endif
+
+${CMTROOT}/src/Makefile.core : ;
+ifdef use_requirements
+$(use_requirements) : ;
+endif
+
+#-- end of make_header ------------------
+#-- start of install_python_header ------
+
+
+installarea = ${CMTINSTALLAREA}
+install_python_dir = $(installarea)
+
+ifneq ($(strip "$(source)"),"")
+src = ../$(source)
+dest = $(install_python_dir)/python
+else
+src = ../python
+dest = $(install_python_dir)
+endif
+
+ifneq ($(strip "$(offset)"),"")
+dest = $(install_python_dir)/python
+endif
+
+FirstSvc_python :: FirstSvc_pythoninstall
+
+install :: FirstSvc_pythoninstall
+
+FirstSvc_pythoninstall :: $(install_python_dir)
+	@if [ ! "$(installarea)" = "" ] ; then\
+	  echo "installation done"; \
+	fi
+
+$(install_python_dir) ::
+	@if [ "$(installarea)" = "" ] ; then \
+	  echo "Cannot install header files, no installation source specified"; \
+	else \
+	  if [ -d $(src) ] ; then \
+	    echo "Installing files from $(src) to $(dest)" ; \
+	    if [ "$(offset)" = "" ] ; then \
+	      $(install_command) --exclude="*.py?" $(src) $(dest) ; \
+	    else \
+	      $(install_command) --exclude="*.py?" $(src) $(dest) --destname $(offset); \
+	    fi ; \
+	  else \
+	    echo "no source  $(src)"; \
+	  fi; \
+	fi
+
+FirstSvc_pythonclean :: FirstSvc_pythonuninstall
+
+uninstall :: FirstSvc_pythonuninstall
+
+FirstSvc_pythonuninstall ::
+	@if test "$(installarea)" = ""; then \
+	  echo "Cannot uninstall header files, no installation source specified"; \
+	else \
+	  echo "Uninstalling files from $(dest)"; \
+	  $(uninstall_command) "$(dest)" ; \
+	fi
+
+
+#-- end of install_python_header ------
+#-- start of cleanup_header --------------
+
+clean :: FirstSvc_pythonclean ;
+#	@cd .
+
+ifndef PEDANTIC
+.DEFAULT::
+	$(echo) "(FirstSvc_python.make) $@: No rule for such target" >&2
+else
+.DEFAULT::
+	$(error PEDANTIC: $@: No rule for such target)
+endif
+
+FirstSvc_pythonclean ::
+#-- end of cleanup_header ---------------

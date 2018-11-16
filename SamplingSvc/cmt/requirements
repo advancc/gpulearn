@@ -1,0 +1,12 @@
+package SamplingSvc
+
+use SniperKernel   v*
+
+macro_append SamplingSvc_linkopts " -lPyROOT "
+macro_append SamplingSvc_linkopts " -ldl "
+
+library SamplingSvc *.cc
+apply_pattern linker_library library=SamplingSvc
+
+apply_pattern install_more_includes more=SamplingSvc
+apply_pattern install_python_modules

@@ -1,0 +1,7 @@
+package TestAlg
+
+use SniperKernel   v*
+use SamplingSvc    v*  TestAlg
+
+library TestAlg *.cc
+apply_pattern install_python_modules

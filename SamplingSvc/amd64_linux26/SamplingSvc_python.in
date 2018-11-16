@@ -1,0 +1,8 @@
+document install_python SamplingSvc_python
+make_fragment make_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/make_header
+make_fragment dependencies /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/dependencies
+make_fragment cleanup_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/cleanup_header
+make_fragment install_python -header=install_python_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/sniper/SniperPolicy/cmt/fragments/install_python
+make_fragment install_python_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/sniper/SniperPolicy/cmt/fragments/install_python_header
+make_fragment document_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/document_header
+make_fragment dependency /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/dependency
