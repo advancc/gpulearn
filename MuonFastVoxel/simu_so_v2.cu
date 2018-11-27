@@ -1,7 +1,8 @@
 /**
  * Author:易培淮
  * Mail:yiph@ihep.ac.cn
- * Function:Accelerate simulation with GPU
+ * Function:Accelerate simulation with Single GPU
+ * 2018/11/27
  */
 
 #include <cuda.h>
@@ -12,9 +13,9 @@
 
 
 __device__ double generateRandom(curandState *state);
-__device__ void generateRandomInit(curandState *state,int id);
+__device__ void generateRandomInit(curandState *state,int seed);
 __device__ int sampling(curandState state,double *histo,int max,int id);
-float CDF_Sampling_Wrapping(double *h_pmt,double *h_hit,double *h_result, int total_num, int nBytes,int max_n,int max_time);
+float CDF_Sampling_Wrapping(double *h_pmt,double *h_hit,double *h_result, int *seed,int total_num, int nBytes,int max_n,int max_time);
 
 #define CHECK(call) \
 {\
@@ -28,11 +29,11 @@ float CDF_Sampling_Wrapping(double *h_pmt,double *h_hit,double *h_result, int to
 }
 
 __global__ void
-CDF_Sampling(curandState *global_state,double *pmt, double *hittime, double *result, int numElements,int max_n,int max_time)
+CDF_Sampling(double *pmt, double *hittime, double *result, int *seed,int numElements,int max_n,int max_time)
 {
     int id = blockIdx.x*blockDim.x+threadIdx.x;
     curandState state;
-    generateRandomInit(&state,id);
+    generateRandomInit(&state,seed[id]);
     if (id < numElements)
     {
         int n = sampling(state,pmt,max_n,id);
@@ -49,9 +50,9 @@ generateRandom(curandState *state)
     return result;
 }
 __device__ void
-generateRandomInit(curandState *state,int id)
+generateRandomInit(curandState *state,int seed)
 {
-    curand_init(id, 0, 0, state);
+    curand_init(seed, 0, 0, state);
 }
 __device__ int 
 sampling(curandState state,double *histo,int max,int id)
@@ -66,7 +67,7 @@ sampling(curandState state,double *histo,int max,int id)
         if (prob <= sum)
         {
             result = item;
-            // printf("thread %d: hit times:%d\n", id, n);
+            printf("thread %d: hit times:%d\n", id, result);
             break;
         }
     }
@@ -74,7 +75,7 @@ sampling(curandState state,double *histo,int max,int id)
 }
 extern "C" 
 {
-    float CDF_Sampling_wrapper(double *h_pmt,double *h_hit,double *h_result, int total_num, int nBytes,int max_n,int max_time)
+    float CDF_Sampling_wrapper(double *h_pmt,double *h_hit,double *h_result, int *seed, int total_num, int nBytes,int max_n,int max_time)
     {
 		//GPU计时，设置开始和结束事件
 		cudaEvent_t start, stop, gpu_start,gpu_stop;
@@ -84,13 +85,16 @@ extern "C"
 		cudaEventCreate(&gpu_stop);
 		cudaEventRecord(start);
         //申请GPU内存
-	    double *d_pmt, *d_hit,*d_result;
+		double *d_pmt, *d_hit,*d_result;
+		int *d_seed;
 	    CHECK(cudaMalloc((double**)&d_pmt,nBytes));
 	    CHECK(cudaMalloc((double**)&d_hit, nBytes));
-	    CHECK(cudaMalloc((double**)&d_result, nBytes));
+		CHECK(cudaMalloc((double**)&d_result, nBytes));
+		CHECK(cudaMalloc((int**)&d_seed,nBytes/2));
         //将CPU内存拷贝到GPU
 	    CHECK(cudaMemcpy(d_pmt, h_pmt, nBytes, cudaMemcpyHostToDevice));
-        CHECK(cudaMemcpy(d_hit, h_hit, nBytes, cudaMemcpyHostToDevice));
+		CHECK(cudaMemcpy(d_hit, h_hit, nBytes, cudaMemcpyHostToDevice));
+		CHECK(cudaMemcpy(d_seed,seed,nBytes/2,cudaMemcpyHostToDevice));
         //设置使用编号为0的GPU
 	    CHECK(cudaSetDevice(0));
 		//设置线程数量
@@ -117,7 +121,7 @@ extern "C"
 		
 		cudaEventRecord(gpu_start);
         //调用核函数
-		CDF_Sampling <<<grid, block >>>(d_pmt, d_hit, d_result, total_num,max_n,max_time);
+		CDF_Sampling <<<grid, block >>>(d_pmt, d_hit, d_result, d_seed,total_num,max_n,max_time);
 		
 		cudaEventRecord(gpu_stop);
 		cudaEventSynchronize(gpu_stop);//同步，强制CPU等待GPU event被设定
