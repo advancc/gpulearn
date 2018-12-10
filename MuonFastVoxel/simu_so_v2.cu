@@ -58,21 +58,51 @@ __device__ int
 sampling(curandState state,double *histo,int max,int id)
 {
     double prob; 
-    prob = generateRandom(&state);
-    double sum = 0;
-    int result = 0;
-    for (int item = 0; item < max;item++)
-    {
-        sum += histo[id*max+item];
-        if (prob <= sum)
-        {
-            result = item;
-            printf("thread %d: hit times:%d\n", id, result);
-            break;
-        }
-    }
-    return result;
+	prob = generateRandom(&state);
+	return binarySearch(histo,prob,max,id);
+	// int result = 0;
+	// return result;
+	// double sum = 0;
+    // for (int item = 0; item < max;item++)
+    // {
+    //     sum += histo[id*max+item];
+    //     if (prob <= sum)
+    //     {
+    //         result = item;
+    //         printf("thread %d: hit times:%d\n", id, result);
+    //         break;
+    //     }
+    // }
+    // return result;
 }
+__device__ int
+binarySearch(double *histo,double target,int max,int id)
+{
+	int start = 0;
+	int end = max-1; 
+	int mid;
+
+	while(start+1<end){
+		mid = start+(end-start)/2;
+		if (histo[id*max+mid]==target){
+			end = mid;
+		} 
+		else if (histo[id*max+mid] < target){
+			start = mid;
+		}
+		else if (histo[id*max+mid] > target){
+			end = mid;
+		}
+	}
+	if (histo[id*max+start] == target){
+		return start;
+	}
+	if (histo[id*max+end] == target){
+		return end;
+	}
+	return -1
+}
+
 extern "C" 
 {
     float CDF_Sampling_wrapper(double *h_pmt,double *h_hit,double *h_result, int *seed, int total_num, int nBytes,int max_n,int max_time)
