@@ -163,7 +163,7 @@ __device__ int
 binarySearch(double *histo,double target,int max,int id)
 {
 	int start = 0;
-	int end = max-1; 
+	int end = max-1;
 	int mid;
 
 	while(start+1<end){
@@ -269,7 +269,7 @@ extern "C"
 */
 extern "C"
 {
-	float CDF_Sampling_wrapper(double *h_npe,double *h_hit,double *h_pmt_pos,double *h_result, int *seed, int total_num, int nBytes,int max_n,int max_time)
+	float GPU_Sampling_wrapper(double *h_npe,double *h_hit,double *h_pmt_pos,double *h_result, int *seed, int total_num, int nBytes,int max_n,int max_time)
     {
 		//GPU计时，设置开始和结束事件
 		cudaEvent_t start, stop, gpu_start,gpu_stop;
@@ -278,6 +278,7 @@ extern "C"
 		cudaEventCreate(&gpu_start);
 		cudaEventCreate(&gpu_stop);
 		cudaEventRecord(start);
+		
         //申请GPU内存
 		double *d_pmt, *d_hit,*d_result;
 		int *d_seed;
