@@ -37,11 +37,11 @@ __device__ void generateRandomInit(curandState *state,int seed);
 __device__ int sampling(curandState *state,double *histo,int max,int id);
 __device__ int binarySearch(double *histo,double target,int max,int id);
 __device__ double calculateAngle(double x,double y,double z,double a,double b,double c);
-__device__ void generateHits(double r,double theta, double ratio,int pmtid,double start_time,double *hittime,double *npe,curandState *state,Res_Arr r_arr);
+__device__ void generateHits(double r,double theta, double ratio,double start_time,double *hittime_histo,double *npe,curandState *state,Res_Arr r_arr);
 __device__ void save_hits(Res_Arr *p,double val);
-__device__ int get_hittime(double r, double theta, int mode, double *hittime, curandState *state);
-__device__ int get_hittime_bin(int binx, int biny, int mode, double *hittime, curandState *state);
-__device__ int get_hittime_all(int binx, int biny,double *hittime, curandState *state);
+__device__ int get_hittime(double r, double theta, int mode, double *hittime_histo, curandState *state);
+__device__ int get_hittime_bin(int binx, int biny, int mode, double *hittime_histo, curandState *state);
+__device__ int get_hittime_all(int binx, int biny,double *hittime_histo, curandState *state);
 __device__ int get_bin_x(double r);
 __device__ int get_bin_y(double theta);
 __device__ int r_findBin(double r);
@@ -51,12 +51,9 @@ __device__ int theta_findBin(double theta);
 __device__ int get_npe_num(int binx,int biny,double *npe,curandState *state);
 __device__ int generateRandomInt(curandState *state,int begin,int end);
 
-__global__ void pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime,double *npe,int *seed,double *result,int *pmt_res_list,int size);
-__global__ void init_random(curandState *state);
-// __global__ void step_calculate(double r,double pos_x,double pos_y,double pos_z,double intPart,double fractionPart,double start_time,double *pmt_x,double *pmt_y,double *pmt_z,double *hittime,double *npe,int *seed,double *result,int *pmt_list,int size);
-// __device__ void init_arr(Arr *pArr, int length);//初始化数组
-// __device__ bool append_arr(Arr *pArr, int val);//追加，可能成功，可能失败
-// __device__ bool is_full_arr(Arr *pArr);//是否满了
+__global__ void pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size);
+__global__ void test(double *hittime);
+
 __device__ void append_res_arr(Res_Arr *p, double val);
 __device__ void init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmtid,int size);
 
@@ -76,16 +73,16 @@ __device__ void init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmt
 #define CUDART_PI_F 3.141592654f
 
 __global__ void 
-init_random(curandState *state)
+test(double *hittime)
 {
     int id = blockIdx.x*blockDim.x+threadIdx.x;
-    // if (id < numElements){
-    //     generateRandomInit((state+id), id);
-    // }
+    if (hittime[id]!=0){
+        printf("%lf\n",hittime[id]);
+    }
 }
 
 __global__ void
-pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime,double *npe,int *seed,double *result,int *pmt_res_list,int size){
+pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size){
     int id = blockIdx.x*blockDim.x+threadIdx.x;   
     // printf("num= %d",numElements); 
     // double hittime_single;
@@ -99,33 +96,14 @@ pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,doub
         // printf("theta = %lf\n",theta);
         for(int j = 0; j < intPart; ++j){
             //r 单位 米
-        	generateHits(r,theta,1,id,start_time,hittime,npe,&state,pmt_arr);
+        	generateHits(r,theta,1,start_time,hittime_histo,npe,&state,pmt_arr);
         	// save_hit(&pmt_arr,hittime_single);
         	// save_hits_simple(hittime_single);
         }
-        generateHits(r,theta,fractionPart,id,start_time,hittime,npe,&state,pmt_arr);
+        generateHits(r,theta,fractionPart,start_time,hittime_histo,npe,&state,pmt_arr);
         // save_hits_simple(&pmt_arr,hittime_single);
     }
 }
-
-
-// __host__ void
-// step_calculate(double r,double pos_x,double pos_y,double pos_z,double intPart,double fractionPart,double start_time,double *pmt_x,double *pmt_y,double *pmt_z,double *hittime,double *npe,int *seed,double *result,int *pmt_list,int size){
-// 	//设置线程数量
-// 	CHECK(cudaDeviceSynchronize());
-// 	printf("[GPU]启动核函数\n");
-    
-// 	int threadPerBlock=1024;
-// 	int blocksPerGrid = ceil(pmt_num/threadPerBlock);
-// 	dim3 block(threadPerBlock);
-// 	//设置块数量
-// 	dim3 grid(blocksPerGrid);//blocksPerGrid
-// 	printf("[GPU]网格，线程(%d,%d)\n",blocksPerGrid,threadPerBlock);
-// 	CHECK(cudaDeviceSynchronize());
-// 	pmt_calculate<<<grid, block>>>(r,pos_x,pos_y,pos_z,pmt_x,pmt_y,pmt_z,intPart,fractionPart,start_time,pmt_num,hittime,npe,seed,result,pmt_list,size);
-// }
-
-
 
 __device__ double
 calculateAngle(double x,double y,double z,double a,double b,double c)
@@ -143,26 +121,24 @@ calculateAngle(double x,double y,double z,double a,double b,double c)
 }
 
 __device__ void 
-generateHits(double r,double theta, double ratio,int pmtid,double start_time,double *hittime,double *npe,curandState *state,Res_Arr r_arr)
+generateHits(double r,double theta, double ratio,double start_time,double *hittime_histo,double *npe,curandState *state,Res_Arr r_arr)
 {
     
     int npe_histo_id = get_npe(r,theta,npe,state);
-    //  printf("npe_histo_id = %d\n",npe_histo_id);
     if (npe_histo_id>0)
     {
-        // printf("npe_histo_id = %d\n",npe_histo_id);
+        // printf("npe_histo_id = %d,r = %lf,theta = %lf\n",npe_histo_id,r,theta);
         for (int hitj = 0; hitj < npe_histo_id; ++hitj) 
         {
-            printf("ratio=%lf\n",ratio);
+            // printf("ratio=%lf\n",ratio);
             // skip the photon according to the energy deposit
             if (ratio<1 and generateRandom(state)>ratio) 
             {
                 continue;
             }
-            printf("start_time =%lf\n",start_time);
             double hittime_single = start_time;
             // (m_flag_time) 
-            hittime_single += (double)get_hittime(r, theta, 0, hittime, state);
+            hittime_single += (double)get_hittime(r, theta, 0, hittime_histo, state);
             printf("hittime = %lf\n",hittime_single);
             // generated hit
             // (m_flag_savehits) 
@@ -178,24 +154,25 @@ generateHits(double r,double theta, double ratio,int pmtid,double start_time,dou
  // }
 
 __device__ int
-get_hittime(double r, double theta, int mode, double *hittime, curandState *state) {
+get_hittime(double r, double theta, int mode, double *hittime_histo, curandState *state) {
     int binx = get_bin_x(r);
     int biny = get_bin_y(theta);
-    return get_hittime_bin(binx, biny, mode, hittime, state);
+    
+    return get_hittime_bin(binx, biny, mode, hittime_histo, state);
 }
 
 __device__ int 
-get_hittime_bin(int binx, int biny, int mode, double *hittime, curandState *state) {
+get_hittime_bin(int binx, int biny, int mode, double *hittime_histo, curandState *state) {
     // hit time = tmean + tres
     int hittime_single = 0;
     if (mode == 0) {
-        hittime_single = get_hittime_all(binx,biny,hittime,state);
+        hittime_single = get_hittime_all(binx,biny,hittime_histo,state);
     }
     return hittime_single;
 }
 
 __device__ int 
-get_hittime_all(int binx, int biny,double *hittime, curandState *state) {
+get_hittime_all(int binx, int biny,double *hittime_histo, curandState *state) {
     // TH1F* h = get_hist(binx, biny);
     const int xbinnum = 200;
     const int ybinnum = 180;
@@ -203,9 +180,9 @@ get_hittime_all(int binx, int biny,double *hittime, curandState *state) {
     else if (binx > xbinnum) { binx = xbinnum;}
     if (biny<1) { biny = 1; }
     else if (biny > ybinnum) { biny = ybinnum;}
-
+    printf("[hittime]binx = %d,biny = %d\n",binx,biny);
     int idx = (binx-1)*ybinnum+(biny-1);
-    int hittime_single = sampling(state,hittime,3000,idx);
+    int hittime_single = sampling(state,hittime_histo,3000,idx);
     return hittime_single;
 }
 
@@ -251,6 +228,7 @@ get_npe(double r,double theta,double *npe,curandState *state)
 {
     int binx = r3_findBin(pow(r,3));
     int biny = theta_findBin(theta);
+    printf("r = %lf,theta = %lf,binx = %d,biny = %d\n",r,theta,binx,biny);
     return get_npe_num(binx,biny,npe,state);
 }
 
@@ -289,7 +267,6 @@ theta_findBin(double theta)
 __device__ int 
 get_npe_num(int binx,int biny,double *npe,curandState *state)
 {
-    // printf("binx = %d,biny = %d\n",binx,biny);
     int npe_from_single = 0;
     if (1 <= binx and binx <= 100 and 1 <= biny and biny <= 180) {
         npe_from_single = sampling(state,npe,33,(binx-1)*180+(biny-1));	
@@ -315,7 +292,7 @@ get_npe_num(int binx,int biny,double *npe,curandState *state)
 __device__ double
 generateRandom(curandState *state)
 {
-    int id = blockIdx.x*blockDim.x+threadIdx.x;   
+    // int id = blockIdx.x*blockDim.x+threadIdx.x;   
     double result = abs(curand_uniform_double(state));
     return result;
 }
@@ -331,7 +308,7 @@ __device__ void
 generateRandomInit(curandState *state,int seed)
 {
     // printf("seed = %d\n",seed);
-    int id = blockIdx.x*blockDim.x+threadIdx.x;   
+    // int id = blockIdx.x*blockDim.x+threadIdx.x;   
     curand_init(seed, 0, 0, state);
 }
 
@@ -346,15 +323,7 @@ sampling(curandState *state,double *histo,int max,int id)
 __device__ int
 binarySearch(double *histo,double target,int max,int id)
 {
-    
-    // printf("prob=%lf \n",target);
-    // if (max == 3000){
-    //     for(int i = 0; i<max;i++){
-    //         printf("%lf ",histo[id*max+i]);
-    //     }
-    // }
-    
-    // printf("]\n");
+
     // int result_for = -1;
     // int result_bin = 0;
     // for (int i=0;i<max;i++){
@@ -364,10 +333,8 @@ binarySearch(double *histo,double target,int max,int id)
     //         return i;
     //     }
     // }
-    // return result_for;
-    // printf("error:histo = %lf,%lf\n",histo[id*max],histo[id*max+max-1]);
-    // printf("error:target=%lf,max=%d,id =%d\n",target,max,id);
     // return -1;
+ 
     int start = 0;
     int end = max-1;
     int mid;
@@ -382,29 +349,14 @@ binarySearch(double *histo,double target,int max,int id)
         else if (histo[id*max+mid] > target){
             end = mid;
         }
-
-        // if (max==3000){
-        //     printf("[debug 3000] start = %d,end = %d,mid = %d\n",start,end,mid);
-        // }
     }
-    // if (end-start !=1 and max == 33){
-    //     printf("error:end=%d, start=%d\n",end,start);
-    // }
     if (target <= histo[id*max+start]){
         return start;
     }
     else if (histo[id*max+start] < target){
         return end;
     }
-    // else if (histo[id*max+end] == target){
-    //     result_bin = end;
-    // }
-    // if (result_bin != result_for){
-    //     printf("error :result_bin =%d,result_for = %d\n",result_bin,result_for);
-    // }
-    // else{
-    //     return result_bin;
-    // }
+    
     return -1;
 }
 
@@ -447,13 +399,6 @@ extern "C"
         double *d_result;
         int *d_seed,*d_pmt_res_list;
 
-        // CHECK(cudaMalloc((double**)&d_r,size[0]));
-        // CHECK(cudaMalloc((double**)&d_pos_x,size[0]));
-        // CHECK(cudaMalloc((double**)&d_pos_y,size[0]));
-        // CHECK(cudaMalloc((double**)&d_pos_z,size[0]));
-        // CHECK(cudaMalloc((double**)&d_intPart,size[0]));
-        // CHECK(cudaMalloc((double**)&d_fractionPart,size[0]));
-        // CHECK(cudaMalloc((double**)&d_start_time,size[0]));
         CHECK(cudaMalloc((double**)&d_pmt_x,size[1]));
         CHECK(cudaMalloc((double**)&d_pmt_y,size[1]));
         CHECK(cudaMalloc((double**)&d_pmt_z,size[1]));
@@ -467,20 +412,12 @@ extern "C"
         CHECK(cudaMemset(d_pmt_res_list,0,pmt_num*sizeof(int)));
         CHECK(cudaMemset(d_result,0,pmt_num*size[0]*50));
         //将CPU内存拷贝到GPU
-        // CHECK(cudaMemcpy(d_r, r, size[0], cudaMemcpyHostToDevice));
-        // CHECK(cudaMemcpy(d_pos_x, pos_x, size[0], cudaMemcpyHostToDevice));
-        // CHECK(cudaMemcpy(d_pos_y, pos_y, size[0], cudaMemcpyHostToDevice));
-        // CHECK(cudaMemcpy(d_pos_z, pos_z, size[0], cudaMemcpyHostToDevice));
-        // CHECK(cudaMemcpy(d_intPart, intPart, size[0], cudaMemcpyHostToDevice));
-        // CHECK(cudaMemcpy(d_fractionPart, fractionPart, size[0], cudaMemcpyHostToDevice));
-        // CHECK(cudaMemcpy(d_start_time, start_time, size[0], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_pmt_x, pmt_x, size[1], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_pmt_y, pmt_y, size[1], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_pmt_z, pmt_z, size[1], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_data_hit, data_hit, size[2], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_data_npe, data_npe, size[3], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_seed, seed, size[4], cudaMemcpyHostToDevice));
-        
         
         printf("[GPU]GPU数据拷贝完成\n");
         //设置使用编号为0的GPU
@@ -492,8 +429,8 @@ extern "C"
         // dim3 block(threadPerBlock);
         // //设置块数量
         // dim3 grid(blocksPerGrid);//blocksPerGrid
-        int threadPerBlock= 1024;
-        int blocksPerGrid = 18;
+        int threadPerBlock= 1;
+        int blocksPerGrid = 1;
         dim3 block(threadPerBlock);
         //设置块数量
         dim3 grid(blocksPerGrid);//blocksPerGrid
@@ -503,7 +440,6 @@ extern "C"
             CHECK(cudaDeviceSynchronize());
             printf("[GPU]核函数开始运行[%d]\n",i);
             pmt_calculate<<<grid, block>>>(r[i],pos_x[i],pos_y[i],pos_z[i],d_pmt_x,d_pmt_y,d_pmt_z,intPart[i],fractionPart[i],start_time[i],17746,d_data_hit,d_data_npe,(int*)(d_seed+i*pmt_num),d_result,d_pmt_res_list,(int)size[0]/8);
-            // step_calculate(r[i],pos_x[i],pos_y[i],pos_z[i],intPart[i],fractionPart[i],start_time[i],d_pmt_x,d_pmt_y,d_pmt_z,d_data_hit,d_data_npe,(int*)(d_seed+i*pmt_num),d_result,d_pmt_res_list,(int)size[0]/8);
         }
         
         
@@ -527,15 +463,8 @@ extern "C"
         // cudaEventDestroy(gpu_stop);
 
         //释放GPU内存
-        // CHECK(cudaFree(d_r));
-        // CHECK(cudaFree(d_pos_x));
-        // CHECK(cudaFree(d_pos_y));
-        // CHECK(cudaFree(d_pos_z));
-        // CHECK(cudaFree(d_intPart));
-        // CHECK(cudaFree(d_fractionPart));
         CHECK(cudaFree(d_data_hit));
         CHECK(cudaFree(d_data_npe));
-        // CHECK(cudaFree(d_start_time));
         CHECK(cudaFree(d_pmt_x));
         CHECK(cudaFree(d_pmt_y));
         CHECK(cudaFree(d_pmt_z));
