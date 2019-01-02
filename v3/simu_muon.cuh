@@ -2,14 +2,15 @@
 #define SIMU_MUON_CUH
 
 #include <cuda.h>
+#include <stdio.h>
+#include "vector.cuh"
+#include "sample.cuh"
 #include <cuda_runtime_api.h>
 #include <math_constants.h>
 
 __global__ void pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size);
-
 __device__ double calculateAngle(double x,double y,double z,double a,double b,double c);
 __device__ void generateHits(double r,double theta, double ratio,double start_time,double *hittime_histo,double *npe,curandState *state,Res_Arr r_arr);
-__device__ void save_hits(Res_Arr *p,double val);
 __device__ int get_hittime(double r, double theta, int mode, double *hittime_histo, curandState *state);
 __device__ int get_hittime_bin(int binx, int biny, int mode, double *hittime_histo, curandState *state);
 __device__ int get_hittime_all(int binx, int biny,double *hittime_histo, curandState *state);

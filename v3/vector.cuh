@@ -13,5 +13,6 @@ typedef struct res_arr
 
 __device__ void append_res_arr(Res_Arr *p, double val);
 __device__ void init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmtid,int size);
+#define pmt_mem 2000
 
 #endif //VECTOR_CUH

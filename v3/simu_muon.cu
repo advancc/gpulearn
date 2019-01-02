@@ -45,6 +45,7 @@ generateHits(double r,double theta, double ratio,double start_time,double *hitti
             double hittime_single = start_time;
             // (m_flag_time) 
             hittime_single += (double)get_hittime(r, theta, 0, hittime_histo, state);
+            printf("hittime = %lf\n",hittime_single);
             // save_hits
             append_res_arr(&r_arr,hittime_single);
         }

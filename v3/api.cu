@@ -1,8 +1,6 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <stdio.h>
-#include "sample.cuh"
-#include "vector.cuh"
 #include "simu_muon.cuh"
 
 extern "C"
