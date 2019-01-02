@@ -38,7 +38,6 @@ __device__ int sampling(curandState *state,double *histo,int max,int id);
 __device__ int binarySearch(double *histo,double target,int max,int id);
 __device__ double calculateAngle(double x,double y,double z,double a,double b,double c);
 __device__ void generateHits(double r,double theta, double ratio,double start_time,double *hittime_histo,double *npe,curandState *state,Res_Arr r_arr);
-__device__ void save_hits(Res_Arr *p,double val);
 __device__ int get_hittime(double r, double theta, int mode, double *hittime_histo, curandState *state);
 __device__ int get_hittime_bin(int binx, int biny, int mode, double *hittime_histo, curandState *state);
 __device__ int get_hittime_all(int binx, int biny,double *hittime_histo, curandState *state);
@@ -52,7 +51,6 @@ __device__ int get_npe_num(int binx,int biny,double *npe,curandState *state);
 __device__ int generateRandomInt(curandState *state,int begin,int end);
 
 __global__ void pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size);
-__global__ void test(double *hittime);
 
 __device__ void append_res_arr(Res_Arr *p, double val);
 __device__ void init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmtid,int size);
@@ -70,16 +68,10 @@ __device__ void init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmt
     }\
 }
 #define pmt_num 17746
+#define pmt_mem 2000
 #define CUDART_PI_F 3.141592654f
 
-__global__ void 
-test(double *hittime)
-{
-    int id = blockIdx.x*blockDim.x+threadIdx.x;
-    if (hittime[id]!=0){
-        printf("%lf\n",hittime[id]);
-    }
-}
+
 
 __global__ void
 pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size){
@@ -139,7 +131,7 @@ generateHits(double r,double theta, double ratio,double start_time,double *hitti
             double hittime_single = start_time;
             // (m_flag_time) 
             hittime_single += (double)get_hittime(r, theta, 0, hittime_histo, state);
-            printf("hittime = %lf\n",hittime_single);
+            // printf("hittime = %lf\n",hittime_single);
             // generated hit
             // (m_flag_savehits) 
             append_res_arr(&r_arr,hittime_single);
@@ -180,7 +172,6 @@ get_hittime_all(int binx, int biny,double *hittime_histo, curandState *state) {
     else if (binx > xbinnum) { binx = xbinnum;}
     if (biny<1) { biny = 1; }
     else if (biny > ybinnum) { biny = ybinnum;}
-    printf("[hittime]binx = %d,biny = %d\n",binx,biny);
     int idx = (binx-1)*ybinnum+(biny-1);
     int hittime_single = sampling(state,hittime_histo,3000,idx);
     return hittime_single;
@@ -228,7 +219,6 @@ get_npe(double r,double theta,double *npe,curandState *state)
 {
     int binx = r3_findBin(pow(r,3));
     int biny = theta_findBin(theta);
-    printf("r = %lf,theta = %lf,binx = %d,biny = %d\n",r,theta,binx,biny);
     return get_npe_num(binx,biny,npe,state);
 }
 
@@ -253,13 +243,11 @@ theta_findBin(double theta)
     const int binnum = 180;
     const double begin = 0; 
     const double end = 180.01*CUDART_PI_F/180.0;
-    //printf("theta = %lf\n",theta);
     if(theta == 0){
-        // printf("theta = %lf,bin=%d\n",theta,1);
+        
         return 1;
     }
     else{
-        // printf("theta = %lf,bin=%d\n",theta,(int)ceil(theta/(end-begin)*binnum));
         return (int)ceil((theta-begin)/(end-begin)*binnum);
     }
 }
@@ -371,9 +359,9 @@ append_res_arr(Res_Arr *p, double val)//追加，可能成功，可能失败
 
 __device__ void
 init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmtid,int size){
-    p->arr = result;
-    p->pmt_list = pmt_res_list;
-    p->index = pmtid*size*50;//存储该pmt在数组中的起始存取点
+    p->arr = result;//存储的内存空间
+    p->pmt_list = pmt_res_list;//存储每个pmt内存空间使用量
+    p->index = pmtid*pmt_mem;//存储该pmt在数组中的起始存取点
     p->id = pmtid;
     // p->begin = begin;
     // p->len = len;
@@ -386,13 +374,15 @@ extern "C"
     {
         //GPU计时，设置开始和结束事件
         cudaEvent_t start, stop;
-        // cudaEvent_t gpu_start,gpu_stop;
+        cudaEvent_t gpu_start,gpu_stop,data_start,data_stop;
         CHECK(cudaEventCreate(&start));
         CHECK(cudaEventCreate(&stop));
-        // cudaEventCreate(&gpu_start);
-        // cudaEventCreate(&gpu_stop);
+        cudaEventCreate(&gpu_start);
+        cudaEventCreate(&gpu_stop);
+        cudaEventCreate(&data_start);
+        cudaEventCreate(&data_stop);
         cudaEventRecord(start);
-    
+        cudaEventRecord(data_start);
         //申请GPU内存
         // double *d_r, *d_pos_x,*d_pos_y,*d_pos_z,*d_intPart,*d_fractionPart,*d_start_time;
         double *d_pmt_x,*d_pmt_y,*d_pmt_z,*d_data_hit,*d_data_npe;
@@ -405,12 +395,12 @@ extern "C"
         CHECK(cudaMalloc((double**)&d_data_hit,size[2]));
         CHECK(cudaMalloc((double**)&d_data_npe,size[3]));
         CHECK(cudaMalloc((int**)&d_seed,size[4]));
-        CHECK(cudaMalloc((double**)&d_result,pmt_num*size[0]*50));
+        CHECK(cudaMalloc((double**)&d_result,pmt_num*pmt_mem*8));
         CHECK(cudaMalloc((int**)&d_pmt_res_list,pmt_num*sizeof(int)));
 
         //设置内存
         CHECK(cudaMemset(d_pmt_res_list,0,pmt_num*sizeof(int)));
-        CHECK(cudaMemset(d_result,0,pmt_num*size[0]*50));
+        CHECK(cudaMemset(d_result,0,pmt_num*pmt_mem*8));
         //将CPU内存拷贝到GPU
         CHECK(cudaMemcpy(d_pmt_x, pmt_x, size[1], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_pmt_y, pmt_y, size[1], cudaMemcpyHostToDevice));
@@ -419,7 +409,9 @@ extern "C"
         CHECK(cudaMemcpy(d_data_npe, data_npe, size[3], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_seed, seed, size[4], cudaMemcpyHostToDevice));
         
-        printf("[GPU]GPU数据拷贝完成\n");
+        cudaEventRecord(data_stop);
+        cudaEventSynchronize(data_stop);
+        // printf("[GPU]GPU数据拷贝完成\n");
         //设置使用编号为0的GPU
         CHECK(cudaSetDevice(0));
         // //设置线程数量
@@ -429,38 +421,30 @@ extern "C"
         // dim3 block(threadPerBlock);
         // //设置块数量
         // dim3 grid(blocksPerGrid);//blocksPerGrid
-        int threadPerBlock= 1;
-        int blocksPerGrid = 1;
+        int threadPerBlock= 1024;
+        int blocksPerGrid = 18;
         dim3 block(threadPerBlock);
         //设置块数量
         dim3 grid(blocksPerGrid);//blocksPerGrid
-        printf("[GPU]网格，线程(%d,%d)\n",blocksPerGrid,threadPerBlock);
+        // printf("[GPU]网格，线程(%d,%d)\n",blocksPerGrid,threadPerBlock);
         //调用核函数
+        cudaEventRecord(gpu_start);
         for(int i = 0;i<size[0]/8;i++) {
             CHECK(cudaDeviceSynchronize());
-            printf("[GPU]核函数开始运行[%d]\n",i);
+            // printf("[GPU]核函数开始运行[%d]\n",i);
             pmt_calculate<<<grid, block>>>(r[i],pos_x[i],pos_y[i],pos_z[i],d_pmt_x,d_pmt_y,d_pmt_z,intPart[i],fractionPart[i],start_time[i],17746,d_data_hit,d_data_npe,(int*)(d_seed+i*pmt_num),d_result,d_pmt_res_list,(int)size[0]/8);
         }
+        cudaEventRecord(gpu_stop);
+        cudaEventSynchronize(gpu_stop);
         
-        
-        printf("[GPU]核函数运行完成\n");
-        CHECK(cudaDeviceSynchronize());
+        // printf("[GPU]核函数运行完成\n");
+        // CHECK(cudaDeviceSynchronize());
 
-        CHECK(cudaMemcpy(h_result, d_result, pmt_num*size[0]*50, cudaMemcpyDeviceToHost));
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        float total_time;
-        //计算用时，精度0.5us
-        cudaEventElapsedTime(&total_time, start, stop);
-        cudaEventDestroy(start);
-        cudaEventDestroy(stop);
-        printf("total use time %f ms\n", total_time);
+        CHECK(cudaMemcpy(h_result, d_result, pmt_num*pmt_mem*8, cudaMemcpyDeviceToHost));
+        
         // printf("threadPerBlock:%d\n",threadPerBlock);
         // printf("blocksPerGrid；%d\n",blocksPerGrid);
         
-        // cudaEventElapsedTime(&time, gpu_start, gpu_stop);
-        // cudaEventDestroy(gpu_start);
-        // cudaEventDestroy(gpu_stop);
 
         //释放GPU内存
         CHECK(cudaFree(d_data_hit));
@@ -470,7 +454,26 @@ extern "C"
         CHECK(cudaFree(d_pmt_z));
         CHECK(cudaFree(d_seed));
         CHECK(cudaFree(d_result));
-        printf("[GPU]GPU运行完成\n");
+        // printf("[GPU]GPU运行完成\n");
+
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        float total_time,gputime,datatime;
+        //计算用时，精度0.5us
+        cudaEventElapsedTime(&datatime, data_start, data_stop);
+        cudaEventElapsedTime(&gputime, gpu_start, gpu_stop);
+        cudaEventElapsedTime(&total_time, start, stop);
+        cudaEventDestroy(gpu_start);
+        cudaEventDestroy(gpu_stop);
+        cudaEventDestroy(data_start);
+        cudaEventDestroy(data_stop);
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);        
+        printf("total use time %f ms\n", total_time);
+        printf("gpu use time %f ms\n",gputime);
+        printf("data use time %f ms\n",datatime);
+        printf("data transport back use time %f ms\n",total_time - datatime - gputime);
+        CHECK(cudaDeviceReset());        
         return total_time;
         // return 0.0;
     }
