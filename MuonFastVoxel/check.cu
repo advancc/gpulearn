@@ -10,16 +10,8 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include <stdio.h>
-// #include <math.h>
 #include <math_constants.h>
-
-// typedef struct arr
-// {
-//     double *pBase;//存储的是数组第一个元素的地址
-//     int len;//数组能容纳的最大元素的个数
-//     int cnt;//有效数组个数
-//             //自动增长因子
-// } Arr;
+#include <assert.h>
 
 typedef struct res_arr
 {
@@ -27,8 +19,7 @@ typedef struct res_arr
     int *pmt_list;
     int index;
     int id;
-    // int begin;
-    // int len;
+    int max;
 } Res_Arr;
 
 
@@ -37,7 +28,8 @@ __device__ void generateRandomInit(curandState *state,int seed);
 __device__ int sampling(curandState *state,double *histo,int max,int id);
 __device__ int binarySearch(double *histo,double target,int max,int id);
 __device__ double calculateAngle(double x,double y,double z,double a,double b,double c);
-__device__ void generateHits(double r,double theta, double ratio,double start_time,double *hittime_histo,double *npe,curandState *state,Res_Arr r_arr);
+__device__ void generateHits(double r,double theta, double ratio,double start_time,\
+    double *hittime_histo,double *npe,curandState *state,Res_Arr *p_r_arr);
 __device__ int get_hittime(double r, double theta, int mode, double *hittime_histo, curandState *state);
 __device__ int get_hittime_bin(int binx, int biny, int mode, double *hittime_histo, curandState *state);
 __device__ int get_hittime_all(int binx, int biny,double *hittime_histo, curandState *state);
@@ -50,7 +42,17 @@ __device__ int theta_findBin(double theta);
 __device__ int get_npe_num(int binx,int biny,double *npe,curandState *state);
 __device__ int generateRandomInt(curandState *state,int begin,int end);
 
-__global__ void pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size);
+__global__ void pmt_calculate(double r,double pos_x,double pos_y,double pos_z,\
+    double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,\
+    double start_time,int numElements,double *hittime_histo,double *npe,int *seed,\
+    double *result,int *pmt_res_list,int size);
+__device__ void calculate_by_step(double r,double pos_x,double pos_y,double pos_z,\
+    double pmt_x,double pmt_y,double pmt_z,double intPart,double fractionPart,\
+    double start_time,double *hittime_histo,double *npe,curandState *state,Res_Arr *p_pmt_arr);
+__global__ void step_calculate_every_pmt(double *r,double *pos_x,double *pos_y,\
+    double *pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double *intPart,\
+    double *fractionPart,double *start_time, int numElements,double *hittime_histo,\
+    double *npe,int *seed,double *result,int *pmt_res_list,int size);
 
 __device__ void append_res_arr(Res_Arr *p, double val);
 __device__ void init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmtid,int size);
@@ -68,16 +70,17 @@ __device__ void init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmt
     }\
 }
 #define pmt_num 17746
-#define pmt_mem 2000
+#define pmt_mem 10000
 #define CUDART_PI_F 3.141592654f
 
 
 
 __global__ void
-pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size){
+pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,double *pmt_y,\
+    double *pmt_z,double intPart,double fractionPart,double start_time,int numElements,\
+    double *hittime_histo,double *npe,int *seed,double *result,int *pmt_res_list,int size)
+{
     int id = blockIdx.x*blockDim.x+threadIdx.x;   
-    // printf("num= %d",numElements); 
-    // double hittime_single;
     //numElements = pmt numbers
     if (id < numElements){
         curandState state;
@@ -88,19 +91,55 @@ pmt_calculate(double r,double pos_x,double pos_y,double pos_z,double *pmt_x,doub
         // printf("theta = %lf\n",theta);
         for(int j = 0; j < intPart; ++j){
             //r 单位 米
-        	generateHits(r,theta,1,start_time,hittime_histo,npe,&state,pmt_arr);
-        	// save_hit(&pmt_arr,hittime_single);
-        	// save_hits_simple(hittime_single);
+        	generateHits(r,theta,1,start_time,hittime_histo,npe,&state,&pmt_arr);
         }
-        generateHits(r,theta,fractionPart,start_time,hittime_histo,npe,&state,pmt_arr);
-        // save_hits_simple(&pmt_arr,hittime_single);
+        generateHits(r,theta,fractionPart,start_time,hittime_histo,npe,&state,&pmt_arr);
     }
 }
+
+
+__global__ void
+step_calculate_every_pmt(double *r,double *pos_x,double *pos_y,double *pos_z,double *pmt_x,\
+    double *pmt_y,double *pmt_z,double *intPart,double *fractionPart,double *start_time, \
+    int numElements,double *hittime_histo,double *npe,int *seed,double *result, \
+    int *pmt_res_list,int size)
+{
+    int id = blockIdx.x*blockDim.x+threadIdx.x;   
+    //numElements = pmt numbers
+    if (id < numElements){
+        curandState state;
+        generateRandomInit(&state,seed[id]);
+        Res_Arr pmt_arr;
+        init_res_arr(&pmt_arr,result,pmt_res_list,id,size);
+        for(int i=0;i<size;i++)
+        {
+            int index = i*numElements+id;
+            calculate_by_step(r[index],pos_x[index],pos_y[index],pos_z[index],pmt_x[id],pmt_y[id],\
+                pmt_z[id],intPart[index],fractionPart[index],start_time[index],hittime_histo,\
+                npe,&state,&pmt_arr);
+        }
+    }
+}
+
+__device__ void
+calculate_by_step(double r,double pos_x,double pos_y,double pos_z,double pmt_x,double pmt_y,\
+    double pmt_z,double intPart,double fractionPart,double start_time,double *hittime_histo,\
+    double *npe,curandState *state,Res_Arr *p_pmt_arr)
+{
+    double theta = calculateAngle(pmt_x,pmt_y,pmt_z,pos_x,pos_y,pos_z);
+    for(int j = 0;j<intPart; ++j){
+        //r(m)
+        generateHits(r,theta,1,start_time,hittime_histo,npe,state,p_pmt_arr);
+    }
+    generateHits(r,theta,fractionPart,start_time,hittime_histo,npe,state,p_pmt_arr);
+}
+
+
 
 __device__ double
 calculateAngle(double x,double y,double z,double a,double b,double c)
 {
-//  printf("x=%lf,y=%lf,z=%lf,a=%lf,b=%lf,c=%lf\n",x,y,z,a,b,c);
+    //  printf("x=%lf,y=%lf,z=%lf,a=%lf,b=%lf,c=%lf\n",x,y,z,a,b,c);
     double result = 0;
     if (a == 0 and b == 0 and c == 0){
         return result;
@@ -113,7 +152,8 @@ calculateAngle(double x,double y,double z,double a,double b,double c)
 }
 
 __device__ void 
-generateHits(double r,double theta, double ratio,double start_time,double *hittime_histo,double *npe,curandState *state,Res_Arr r_arr)
+generateHits(double r,double theta, double ratio,double start_time,double *hittime_histo,\
+    double *npe,curandState *state,Res_Arr *p_r_arr)
 {
     
     int npe_histo_id = get_npe(r,theta,npe,state);
@@ -131,10 +171,10 @@ generateHits(double r,double theta, double ratio,double start_time,double *hitti
             double hittime_single = start_time;
             // (m_flag_time) 
             hittime_single += (double)get_hittime(r, theta, 0, hittime_histo, state);
-            // printf("hittime = %lf\n",hittime_single);
+            printf("hittime = %lf\n",hittime_single);
             // generated hit
             // (m_flag_savehits) 
-            append_res_arr(&r_arr,hittime_single);
+            append_res_arr(p_r_arr,hittime_single);
             // save_hits(pmtid, hittime_single,result);
         }
     }
@@ -353,6 +393,8 @@ append_res_arr(Res_Arr *p, double val)//追加，可能成功，可能失败
 {
     p->arr[p->index+p->pmt_list[p->id]] = val;
     p->pmt_list[p->id] += 1;
+    assert(p->pmt_list[p->id]<=p->max);
+    
     return;
 
 }
@@ -363,6 +405,7 @@ init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmtid,int size){
     p->pmt_list = pmt_res_list;//存储每个pmt内存空间使用量
     p->index = pmtid*pmt_mem;//存储该pmt在数组中的起始存取点
     p->id = pmtid;
+    p->max = pmt_mem;
     // p->begin = begin;
     // p->len = len;
     return;
@@ -370,7 +413,9 @@ init_res_arr(Res_Arr *p,double *result,int *pmt_res_list,int pmtid,int size){
 
 extern "C"
 {
-    float GPU_Sampling_wrapper(double *r,double *pos_x,double *pos_y,double *pos_z, double *intPart, double *fractionPart,double *start_time,double *pmt_x,double *pmt_y,double *pmt_z,double *data_hit,double *data_npe,int *seed,int *size,double* h_result)
+    float GPU_Sampling_wrapper(double *r,double *pos_x,double *pos_y,double *pos_z, \
+        double *intPart, double *fractionPart,double *start_time,double *pmt_x,double *pmt_y,\
+        double *pmt_z,double *data_hit,double *data_npe,int *seed,int *size,double* h_result)
     {
         //GPU计时，设置开始和结束事件
         cudaEvent_t start, stop;
@@ -384,24 +429,37 @@ extern "C"
         cudaEventRecord(start);
         cudaEventRecord(data_start);
         //申请GPU内存
-        // double *d_r, *d_pos_x,*d_pos_y,*d_pos_z,*d_intPart,*d_fractionPart,*d_start_time;
+        double *d_r, *d_pos_x,*d_pos_y,*d_pos_z,*d_intPart,*d_fractionPart,*d_start_time;
         double *d_pmt_x,*d_pmt_y,*d_pmt_z,*d_data_hit,*d_data_npe;
         double *d_result;
         int *d_seed,*d_pmt_res_list;
-
+        CHECK(cudaMalloc((double**)&d_r,size[0]));
+        CHECK(cudaMalloc((double**)&d_pos_x,size[0]));
+        CHECK(cudaMalloc((double**)&d_pos_y,size[0]));
+        CHECK(cudaMalloc((double**)&d_pos_z,size[0]));
+        CHECK(cudaMalloc((double**)&d_intPart,size[0]));
+        CHECK(cudaMalloc((double**)&d_fractionPart,size[0]));
+        CHECK(cudaMalloc((double**)&d_start_time,size[0]));
         CHECK(cudaMalloc((double**)&d_pmt_x,size[1]));
         CHECK(cudaMalloc((double**)&d_pmt_y,size[1]));
         CHECK(cudaMalloc((double**)&d_pmt_z,size[1]));
         CHECK(cudaMalloc((double**)&d_data_hit,size[2]));
         CHECK(cudaMalloc((double**)&d_data_npe,size[3]));
         CHECK(cudaMalloc((int**)&d_seed,size[4]));
-        CHECK(cudaMalloc((double**)&d_result,pmt_num*pmt_mem*8));
+        CHECK(cudaMalloc((double**)&d_result,pmt_num*pmt_mem*sizeof(double)));
         CHECK(cudaMalloc((int**)&d_pmt_res_list,pmt_num*sizeof(int)));
 
         //设置内存
         CHECK(cudaMemset(d_pmt_res_list,0,pmt_num*sizeof(int)));
-        CHECK(cudaMemset(d_result,0,pmt_num*pmt_mem*8));
+        CHECK(cudaMemset(d_result,0,pmt_num*pmt_mem*sizeof(double)));
         //将CPU内存拷贝到GPU
+        CHECK(cudaMemcpy(d_r, r, size[0], cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(d_pos_x, pos_x, size[0], cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(d_pos_y, pos_y, size[0], cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(d_pos_z, pos_z, size[0], cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(d_intPart, intPart, size[0], cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(d_fractionPart, fractionPart, size[0], cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(d_start_time, start_time, size[0], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_pmt_x, pmt_x, size[1], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_pmt_y, pmt_y, size[1], cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(d_pmt_z, pmt_z, size[1], cudaMemcpyHostToDevice));
@@ -415,32 +473,30 @@ extern "C"
         //设置使用编号为0的GPU
         CHECK(cudaSetDevice(0));
         // //设置线程数量
-        // int threadPerBlock = 1024;
-        // int blocksPerGrid =ceil(17746/1024);
-        
-        // dim3 block(threadPerBlock);
-        // //设置块数量
-        // dim3 grid(blocksPerGrid);//blocksPerGrid
         int threadPerBlock= 1024;
         int blocksPerGrid = 18;
         dim3 block(threadPerBlock);
         //设置块数量
         dim3 grid(blocksPerGrid);//blocksPerGrid
-        // printf("[GPU]网格，线程(%d,%d)\n",blocksPerGrid,threadPerBlock);
         //调用核函数
         cudaEventRecord(gpu_start);
-        for(int i = 0;i<size[0]/8;i++) {
-            CHECK(cudaDeviceSynchronize());
-            // printf("[GPU]核函数开始运行[%d]\n",i);
-            pmt_calculate<<<grid, block>>>(r[i],pos_x[i],pos_y[i],pos_z[i],d_pmt_x,d_pmt_y,d_pmt_z,intPart[i],fractionPart[i],start_time[i],17746,d_data_hit,d_data_npe,(int*)(d_seed+i*pmt_num),d_result,d_pmt_res_list,(int)size[0]/8);
-        }
+        // for(int i = 0;i<size[0]/8;i++) {
+        //     CHECK(cudaDeviceSynchronize());
+        //     // printf("[GPU]核函数开始运行[%d]\n",i);
+        //     pmt_calculate<<<grid, block>>>(r[i],pos_x[i],pos_y[i],pos_z[i],d_pmt_x,d_pmt_y,\
+        //         d_pmt_z,intPart[i],fractionPart[i],start_time[i],17746,d_data_hit,d_data_npe,\
+        //         (int*)(d_seed+i*pmt_num),d_result,d_pmt_res_list,(int)size[0]/8);
+        // }
+        step_calculate_every_pmt<<<grid, block>>>(d_r,d_pos_x,d_pos_y,d_pos_z,d_pmt_x,d_pmt_y,\
+            d_pmt_z,d_intPart,d_fractionPart,d_start_time,pmt_num,d_data_hit,d_data_npe,d_seed,\
+            d_result,d_pmt_res_list,(int)size[0]/sizeof(double));
         cudaEventRecord(gpu_stop);
         cudaEventSynchronize(gpu_stop);
         
         // printf("[GPU]核函数运行完成\n");
         // CHECK(cudaDeviceSynchronize());
 
-        CHECK(cudaMemcpy(h_result, d_result, pmt_num*pmt_mem*8, cudaMemcpyDeviceToHost));
+        CHECK(cudaMemcpy(h_result, d_result, pmt_num*pmt_mem*sizeof(double), cudaMemcpyDeviceToHost));
         
         // printf("threadPerBlock:%d\n",threadPerBlock);
         // printf("blocksPerGrid；%d\n",blocksPerGrid);
