@@ -1,0 +1,29 @@
+library SamplingSvc -prototypes -no_modules *.cc
+make_fragment make_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/make_header
+make_fragment dependencies /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/dependencies
+make_fragment cleanup_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/cleanup_header
+make_fragment protos_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/protos_header
+make_fragment buildproto /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/buildproto
+make_fragment dependencies_and_triggers /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/dependencies_and_triggers
+make_fragment java /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/java
+make_fragment java_copy /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/java_copy
+make_fragment cleanup /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/cleanup
+make_fragment cleanup_java /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/cleanup_java
+make_fragment jar_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/jar_header
+make_fragment library_header /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/library_header
+make_fragment jar /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/jar
+make_fragment library_no_share /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/library_no_share
+make_fragment library_no_static /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/library_no_static
+make_fragment library /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/library
+make_fragment cleanup_library /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/cleanup_library
+make_fragment fortran_library /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/fortran_library
+make_fragment c_library /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/c_library
+make_fragment cpp_library /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/cpp_library
+make_fragment yacc_library /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/yacc_library
+make_fragment lex_library /afs/ihep.ac.cn/soft/juno/JUNO-ALL-SLC6/Release/J17v1r1/ExternalLibs/CMT/v1r26/mgr/fragments/lex_library
+language fortran -suffix=f -suffix=F -linker=$(flink) -preprocessor_command=$(ppcmd)
+language c -suffix=c -linker=$(clink) -prototypes -dependencies_options=
+language c++ -suffix=C -suffix=cc -suffix=cxx -suffix=cpp -linker=$(cpplink) -fragment=cpp -dependencies_options=
+language java -suffix=java -linker=java
+language yacc -suffix=y -linker=$(clink) -prototypes
+language lex -suffix=l -linker=$(clink) -prototypes
